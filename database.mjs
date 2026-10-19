@@ -120,6 +120,100 @@ export class Database {
       .replace(/^-+|-+$/g, '');
   }
 
+  detectIndustry(name, existingIndustry = '') {
+    if (existingIndustry && existingIndustry !== 'Kinh doanh tổng hợp' && existingIndustry.trim().length > 3) {
+      return existingIndustry.trim();
+    }
+    if (!name) return 'Hoạt động kinh doanh thương mại và dịch vụ tổng hợp (Mã: 4690)';
+    
+    const n = name.toLowerCase();
+
+    // Mapping patterns according to Vietnam Standard Industrial Classification (VSIC)
+    if (/\b(bất động sản|địa ốc|land|homes|bds|real estate|nhà đất)\b/.test(n)) {
+      return 'Kinh doanh bất động sản, quyền sử dụng đất thuộc chủ sở hữu hoặc đi thuê (Mã: 6810)';
+    }
+    if (/\b(xây dựng|cons|construction|xây lắp|bê tông|thi công|san lấp)\b/.test(n)) {
+      return 'Xây dựng nhà các loại & công trình kỹ thuật dân dụng (Mã: 4100)';
+    }
+    if (/\b(vận tải|logistics|kho vận|vận chuyển|giao nhận|chuyển phát|container)\b/.test(n)) {
+      return 'Vận tải hàng hóa bằng đường bộ, kho bãi và logistics (Mã: 4933)';
+    }
+    if (/\b(công nghệ|phần mềm|tin học|software|it|tech|digital|lập trình)\b/.test(n)) {
+      return 'Lập trình máy vi tính, tư vấn và dịch vụ công nghệ thông tin (Mã: 6201)';
+    }
+    if (/\b(dược|dược phẩm|thuốc|pharma|medical|thiết bị y tế|y tế|phòng khám|bệnh viện)\b/.test(n)) {
+      return 'Bán buôn dược phẩm, dụng cụ và thiết bị y tế (Mã: 4646)';
+    }
+    if (/\b(thực phẩm|food|bánh kẹo|nước giải khát|đồ uống|chế biến thực phẩm)\b/.test(n)) {
+      return 'Chế biến, bảo quản và bán buôn thực phẩm, đồ uống (Mã: 1079)';
+    }
+    if (/\b(thủy sản|thuỷ sản|hải sản|seafood|tôm|cá|thủy hải sản)\b/.test(n)) {
+      return 'Chế biến, bảo quản và nuôi trồng thủy sản (Mã: 1020)';
+    }
+    if (/\b(nội thất|furniture|gỗ|decor|mộc|trang trí nội thất)\b/.test(n)) {
+      return 'Sản xuất và kinh doanh đồ nội thất, trang trí (Mã: 3100)';
+    }
+    if (/\b(tư vấn đầu tư|đầu tư|investment|tài chính|chứng khoán|quản lý quỹ)\b/.test(n)) {
+      return 'Hoạt động tư vấn đầu tư và dịch vụ tài chính (Mã: 6619)';
+    }
+    if (/\b(năng lượng|điện mặt trời|solar|energy|điện gió|xăng dầu|nhiên liệu)\b/.test(n)) {
+      return 'Sản xuất, truyền tải và phân phối điện, năng lượng (Mã: 3511)';
+    }
+    if (/\b(quảng cáo|truyền thông|media|marketing|sự kiện|event|agency)\b/.test(n)) {
+      return 'Quảng cáo, truyền thông và nghiên cứu thị trường (Mã: 7310)';
+    }
+    if (/\b(cơ khí|kim khí|chế tạo máy|khuôn mẫu|gang thép|nhôm kính)\b/.test(n)) {
+      return 'Gia công cơ khí; xử lý và tráng phủ kim loại (Mã: 2592)';
+    }
+    if (/\b(may mặc|thời trang|dệt may|garment|fashion|da giày)\b/.test(n)) {
+      return 'Sản xuất và bán buôn hàng may mặc, giày dép (Mã: 1410)';
+    }
+    if (/\b(giáo dục|đào tạo|mầm non|trường|academy|education|ngoại ngữ|du học)\b/.test(n)) {
+      return 'Giáo dục mầm non, phổ thông và đào tạo nghề (Mã: 8559)';
+    }
+    if (/\b(du lịch|lữ hành|travel|tour|khách sạn|hotel|resort|lưu trú)\b/.test(n)) {
+      return 'Dịch vụ điều hành tour du lịch, lưu trú khách sạn (Mã: 7912)';
+    }
+    if (/\b(nhà hàng|quán ăn|ẩm thực|restaurant|cafe|coffee|trà sữa)\b/.test(n)) {
+      return 'Dịch vụ nhà hàng, dịch vụ ăn uống và giải khát (Mã: 5610)';
+    }
+    if (/\b(bảo vệ|vệ sĩ|an ninh|security)\b/.test(n)) {
+      return 'Dịch vụ bảo vệ và an ninh (Mã: 8010)';
+    }
+    if (/\b(vệ sinh|môi trường|xử lý rác|nước thải)\b/.test(n)) {
+      return 'Vệ sinh công nghiệp và xử lý môi trường (Mã: 8121)';
+    }
+    if (/\b(sơn|hóa chất|chemical|nhựa|plastic|bao bì|in ấn)\b/.test(n)) {
+      return 'Sản xuất hóa chất, sản phẩm từ chất dẻo và bao bì (Mã: 2220)';
+    }
+    if (/\b(khoáng sản|khai khoáng|than|đá|cát|sỏi|xi măng)\b/.test(n)) {
+      return 'Khai thác khoáng sản, vật liệu xây dựng (Mã: 0810)';
+    }
+    if (/\b(bảo hiểm|insurance)\b/.test(n)) {
+      return 'Hoạt động kinh doanh bảo hiểm và môi giới bảo hiểm (Mã: 6511)';
+    }
+    if (/\b(nông nghiệp|trồng trọt|chăn nuôi|nông sản|phân bón)\b/.test(n)) {
+      return 'Trồng trọt, chăn nuôi và chế biến nông sản (Mã: 0111)';
+    }
+    if (/\b(sữa|dairy|milk)\b/.test(n)) {
+      return 'Chế biến sữa và các sản phẩm từ sữa (Mã: 1050)';
+    }
+    if (/\b(viễn thông|telecom|truyền dẫn|bưu chính)\b/.test(n)) {
+      return 'Hoạt động viễn thông có dây và không dây (Mã: 6110)';
+    }
+    if (/\b(mỹ phẩm|làm đẹp|spa|thẩm mỹ|cosmetic)\b/.test(n)) {
+      return 'Bán buôn, bán lẻ mỹ phẩm và dịch vụ làm đẹp (Mã: 4772)';
+    }
+    if (/\b(xuất nhập khẩu|xnk|import|export)\b/.test(n)) {
+      return 'Hoạt động đại lý, xuất nhập khẩu hàng hóa (Mã: 4690)';
+    }
+    if (/\b(thương mại|dịch vụ|trading|service)\b/.test(n)) {
+      return 'Bán buôn, bán lẻ và hoạt động dịch vụ thương mại tổng hợp (Mã: 4690)';
+    }
+
+    return 'Hoạt động kinh doanh thương mại và dịch vụ tổng hợp (Mã: 4690)';
+  }
+
   async saveCompany(company) {
     if (!company || !company.taxId || !company.name || !this.client) return false;
 
@@ -129,6 +223,23 @@ export class Database {
     }
 
     const province = this.extractProvince(company.address || company.taxAddress);
+    const mainIndustry = this.detectIndustry(company.name, company.mainIndustry);
+    
+    // Auto-populate industries list if empty
+    let industries = Array.isArray(company.industries) && company.industries.length > 0 ? company.industries : [];
+    if (industries.length === 0 && mainIndustry) {
+      const codeMatch = mainIndustry.match(/Mã:\s*(\d+)/);
+      const code = codeMatch ? codeMatch[1] : '4690';
+      const cleanName = mainIndustry.replace(/\s*\(Mã:[^)]+\)/, '');
+      industries = [{ code, name: cleanName, isMain: true }];
+    }
+
+    const payload = {
+      ...company,
+      mainIndustry,
+      industries
+    };
+
     const now = Date.now();
 
     try {
@@ -159,8 +270,8 @@ export class Database {
           province,
           company.type || '',
           company.phone || '',
-          company.mainIndustry || '',
-          JSON.stringify(company),
+          mainIndustry,
+          JSON.stringify(payload),
           now,
           now
         ]

@@ -101,7 +101,7 @@ export class MasothueCrawler {
           startDate: '',
           managedBy: 'Cơ quan Thuế',
           type: 'Doanh nghiệp',
-          mainIndustry: 'Kinh doanh tổng hợp',
+          mainIndustry: db.detectIndustry(d.name),
           lastUpdated: new Date().toLocaleDateString('vi-VN'),
           industries: []
         };
@@ -535,10 +535,14 @@ export class MasothueCrawler {
     }
 
     const taxMatch = cleanPath.match(/\/(\d{10}(-\d{3})?)/);
+    let existingInDb = null;
     if (taxMatch) {
-      const existingInDb = await db.getCompanyByTaxId(taxMatch[1]);
+      existingInDb = await db.getCompanyByTaxId(taxMatch[1]);
       if (existingInDb && existingInDb.data) {
-        return { success: true, data: existingInDb.data, fromDb: true };
+        // If it already has full industry list (>1 item), serve instantly from DB!
+        if (existingInDb.data.industries && existingInDb.data.industries.length > 1) {
+          return { success: true, data: existingInDb.data, fromDb: true };
+        }
       }
     }
 
@@ -553,6 +557,9 @@ export class MasothueCrawler {
       });
 
       if (res.statusCode !== 200) {
+        if (existingInDb && existingInDb.data) {
+          return { success: true, data: existingInDb.data, fromDb: true };
+        }
         if (taxMatch) {
           const vCompany = await this.getFromVietQR(taxMatch[1]);
           if (vCompany) {
