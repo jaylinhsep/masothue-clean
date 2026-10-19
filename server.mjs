@@ -178,12 +178,32 @@ app.get('/api/detail', async (req, res) => {
 app.get('/api/debug-crawler', async (req, res) => {
   const diag = {};
   try {
-    diag.hasGoogleKey = Boolean(process.env.GOOGLE_SEARCH_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_KEY);
-    diag.hasGoogleCx = Boolean(process.env.GOOGLE_SEARCH_CX || process.env.GOOGLE_CX || process.env.SEARCH_ENGINE_ID || process.env.GOOGLE_SEARCH_ENGINE_ID);
+    const apiKey = (process.env.GOOGLE_SEARCH_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_KEY || '').trim();
+    const cx = (process.env.GOOGLE_SEARCH_CX || process.env.GOOGLE_CX || process.env.SEARCH_ENGINE_ID || process.env.GOOGLE_SEARCH_ENGINE_ID || '').trim();
 
-    // Test Search
-    const searchResult = await crawler.search('vượng phát');
-    diag.searchResult = searchResult;
+    diag.hasGoogleKey = Boolean(apiKey);
+    diag.hasGoogleCx = Boolean(cx);
+    diag.keyPrefix = apiKey ? apiKey.slice(0, 6) + '...' : null;
+    diag.cxPreview = cx ? cx.slice(0, 8) + '...' : null;
+
+    if (apiKey && cx) {
+      const searchUrl = new URL('https://www.googleapis.com/customsearch/v1');
+      searchUrl.searchParams.set('key', apiKey);
+      searchUrl.searchParams.set('cx', cx);
+      searchUrl.searchParams.set('q', 'huy hoàng');
+      searchUrl.searchParams.set('num', '5');
+
+      const gRes = await fetch(searchUrl.toString(), {
+        headers: { 'Accept': 'application/json' }
+      });
+      diag.googleHttpStatus = gRes.status;
+      const gText = await gRes.text();
+      try {
+        diag.googleJson = JSON.parse(gText);
+      } catch (e) {
+        diag.googleRawText = gText.slice(0, 500);
+      }
+    }
 
     res.json(diag);
   } catch (err) {
