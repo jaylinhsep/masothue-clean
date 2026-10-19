@@ -178,26 +178,8 @@ app.get('/api/detail', async (req, res) => {
 app.get('/api/debug-crawler', async (req, res) => {
   const diag = {};
   try {
-    const { gotScraping } = await import('got-scraping');
-    
-    // Test Token
-    try {
-      const tokenRes = await gotScraping.post('https://masothue.com/Ajax/Token', {
-        headers: {
-          'referer': 'https://masothue.com/',
-          'origin': 'https://masothue.com',
-          'x-requested-with': 'XMLHttpRequest',
-          'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
-        },
-        body: 'r=123456',
-        throwHttpErrors: false
-      });
-      diag.tokenStatusCode = tokenRes.statusCode;
-      diag.tokenBodyPreview = tokenRes.body.slice(0, 300);
-      diag.tokenHeaders = tokenRes.headers;
-    } catch (eToken) {
-      diag.tokenError = eToken.message;
-    }
+    diag.hasGoogleKey = Boolean(process.env.GOOGLE_SEARCH_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_KEY);
+    diag.hasGoogleCx = Boolean(process.env.GOOGLE_SEARCH_CX || process.env.GOOGLE_CX || process.env.SEARCH_ENGINE_ID || process.env.GOOGLE_SEARCH_ENGINE_ID);
 
     // Test Search
     const searchResult = await crawler.search('vượng phát');

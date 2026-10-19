@@ -113,6 +113,98 @@ export class MasothueCrawler {
     return null;
   }
 
+  // --- Official Google Custom Search API Fallback ---
+  async searchViaGoogle(query) {
+    const apiKey = process.env.GOOGLE_SEARCH_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_KEY;
+    const cx = process.env.GOOGLE_SEARCH_CX || process.env.GOOGLE_CX || process.env.SEARCH_ENGINE_ID || process.env.GOOGLE_SEARCH_ENGINE_ID;
+
+    if (!apiKey || !cx) {
+      return null;
+    }
+
+    try {
+      const searchUrl = new URL('https://www.googleapis.com/customsearch/v1');
+      searchUrl.searchParams.set('key', apiKey.trim());
+      searchUrl.searchParams.set('cx', cx.trim());
+      searchUrl.searchParams.set('q', query.trim());
+      searchUrl.searchParams.set('num', '10');
+
+      const res = await fetch(searchUrl.toString(), {
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (!res.ok) {
+        console.warn(`[Google Search] API HTTP ${res.status}:`, await res.text());
+        return null;
+      }
+
+      const data = await res.json();
+      if (!data.items || data.items.length === 0) {
+        return null;
+      }
+
+      const items = [];
+      for (const item of data.items) {
+        const link = item.link || '';
+        const taxMatch = link.match(/(\d{10}(-\d{3})?)/);
+        if (taxMatch) {
+          const taxId = taxMatch[1];
+          let cleanName = (item.title || '')
+            .replace(/-\s*MaSoThue/i, '')
+            .replace(/^\d{10}(-\d{3})?\s*-\s*/, '')
+            .trim();
+
+          let path = link.replace(/https?:\/\/(www\.)?masothue\.com/, '');
+          if (!path.startsWith('/')) path = '/' + path;
+
+          let address = '';
+          if (item.snippet) {
+            const snipParts = item.snippet.split(' - ');
+            if (snipParts.length >= 2) {
+              address = snipParts.slice(1).join(' - ').replace(/\s+/g, ' ').trim();
+            } else {
+              address = item.snippet.replace(/\s+/g, ' ').trim();
+            }
+          }
+
+          items.push({
+            name: cleanName,
+            url: path,
+            taxId,
+            representative: '',
+            address: address || 'Toàn quốc'
+          });
+        }
+      }
+
+      if (items.length === 0) return null;
+
+      // Enhance the 1st match with official government data from VietQR & save to DB!
+      try {
+        const firstCompany = await this.getFromVietQR(items[0].taxId);
+        if (firstCompany) {
+          await db.saveCompany(firstCompany);
+          items[0].name = firstCompany.name || items[0].name;
+          items[0].address = firstCompany.address || items[0].address;
+          items[0].representative = firstCompany.representative || '';
+        }
+      } catch (e) {}
+
+      return {
+        success: true,
+        isDirect: items.length === 1,
+        fromGoogle: true,
+        items,
+        currentPage: 1,
+        maxPage: 1,
+        totalFound: items.length
+      };
+    } catch (err) {
+      console.warn('[Google Search Error]', err.message);
+      return null;
+    }
+  }
+
   async search(query, type = 'auto', page = 1) {
     const q = query ? query.trim() : '';
     if (!q) {
@@ -300,7 +392,14 @@ export class MasothueCrawler {
       };
     }
 
-    // --- FALLBACK 2: If query contains tax digits, try VietQR ---
+    // --- FALLBACK 2: Real-time Google Custom Search API ---
+    const googleResult = await this.searchViaGoogle(effectiveQ);
+    if (googleResult && googleResult.items && googleResult.items.length > 0) {
+      this.setCache(cacheKey, googleResult);
+      return googleResult;
+    }
+
+    // --- FALLBACK 3: If query contains tax digits, try VietQR ---
     const cleanTaxDigits = q.replace(/\D/g, '');
     if (cleanTaxDigits.length >= 10) {
       const vFallback = await this.getFromVietQR(cleanTaxDigits.slice(0, 10));
