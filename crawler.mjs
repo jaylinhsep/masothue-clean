@@ -346,7 +346,16 @@ export class MasothueCrawler {
           body: searchBody.toString()
         });
 
-        ajaxData = JSON.parse(ajaxRes.body);
+        if (ajaxRes.body && ajaxRes.body.trim().startsWith('<')) {
+          // Cloudflare temporary challenge page, don't crash JSON.parse
+          ajaxData = null;
+        } else {
+          try {
+            ajaxData = JSON.parse(ajaxRes.body);
+          } catch (e) {
+            ajaxData = null;
+          }
+        }
 
         // If expired token, retry once
         if (!ajaxData || ajaxData.url === '/') {
@@ -362,11 +371,17 @@ export class MasothueCrawler {
               },
               body: searchBody.toString()
             });
-            ajaxData = JSON.parse(ajaxRes.body);
+            if (ajaxRes.body && !ajaxRes.body.trim().startsWith('<')) {
+              try {
+                ajaxData = JSON.parse(ajaxRes.body);
+              } catch (e) {
+                ajaxData = null;
+              }
+            }
           }
         }
       } catch (err) {
-        console.warn('[Crawler] gotScraping Ajax/Search error:', err.message);
+        // Suppress expected rate-limit warnings
       }
     }
 

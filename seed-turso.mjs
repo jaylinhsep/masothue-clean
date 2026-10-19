@@ -180,15 +180,17 @@ async function main() {
           }
         }
         console.log(`   -> Hoàn tất lưu ${savedInBatch}/${res.items.length} công ty.`);
+        // Nghỉ an toàn 2.5 giây giữa các từ khóa
+        const safeDelay = 2200 + Math.floor(Math.random() * 800);
+        await new Promise(r => setTimeout(r, safeDelay));
       } else {
-        console.log(`   -> Không có kết quả mới cho "${kw}". Tiếp tục từ khóa tiếp theo.`);
+        console.log(`   -> Tạm thời không có kết quả mới cho "${kw}". Hạ nhiệt 4 giây...`);
+        await new Promise(r => setTimeout(r, 4000));
       }
     } catch (err) {
       console.log(`   ⚠️ Lỗi cào từ khóa "${kw}": ${err.message}. Tự động bỏ qua.`);
+      await new Promise(r => setTimeout(r, 3000));
     }
-
-    // Nghỉ nhẹ 1.2 giây để giữ kết nối mượt mà và không bị Cloudflare soi
-    await new Promise(r => setTimeout(r, 1200));
   }
 
   const statsAfter = await db.getStats();
