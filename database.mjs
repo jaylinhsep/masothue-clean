@@ -21,8 +21,26 @@ export class Database {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
 
-    const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.TURSO_DATABA || process.env.TURSO_URL;
-    const tursoToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN;
+    // Auto-load .env if available
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf-8');
+      for (const line of content.split('\n')) {
+        const m = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+        if (m && !process.env[m[1]]) {
+          process.env[m[1]] = (m[2] || '').trim().replace(/^['"](.*)['"]$/, '$1');
+        }
+      }
+    }
+
+    let tursoUrl = process.env.TURSO_DATABASE_URL || process.env.TURSO_DATABA || process.env.TURSO_URL;
+    let tursoToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN;
+
+    // Auto-fix if token was accidentally set as URL
+    if (tursoUrl && tursoUrl.startsWith('eyJ')) {
+      if (!tursoToken) tursoToken = tursoUrl;
+      tursoUrl = 'libsql://masothue-db-ravinpham.aws-ap-northeast-1.turso.io';
+    }
 
     if (tursoUrl && tursoToken) {
       console.log(`[DB] Đang kết nối tới Turso Cloud 5GB: ${tursoUrl}`);
