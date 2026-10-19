@@ -205,6 +205,80 @@ export class MasothueCrawler {
     }
   }
 
+  // --- Serper.dev (Free 2,500 Google Searches) Fallback ---
+  async searchViaSerper(query) {
+    const serperKey = process.env.SERPER_API_KEY || process.env.SERPER_KEY;
+    if (!serperKey) return null;
+
+    try {
+      const res = await fetch('https://google.serper.dev/search', {
+        method: 'POST',
+        headers: {
+          'X-API-KEY': serperKey.trim(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          q: `site:masothue.com ${query.trim()}`,
+          gl: 'vn',
+          hl: 'vi',
+          num: 10
+        })
+      });
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data.organic || data.organic.length === 0) return null;
+
+      const items = [];
+      for (const item of data.organic) {
+        const link = item.link || '';
+        const taxMatch = link.match(/(\d{10}(-\d{3})?)/);
+        if (taxMatch) {
+          const taxId = taxMatch[1];
+          let cleanName = (item.title || '')
+            .replace(/-\s*MaSoThue/i, '')
+            .replace(/^\d{10}(-\d{3})?\s*-\s*/, '')
+            .trim();
+
+          let path = link.replace(/https?:\/\/(www\.)?masothue\.com/, '');
+          if (!path.startsWith('/')) path = '/' + path;
+
+          items.push({
+            name: cleanName,
+            url: path,
+            taxId,
+            representative: '',
+            address: item.snippet || 'Toàn quốc'
+          });
+        }
+      }
+
+      if (items.length === 0) return null;
+
+      try {
+        const firstCompany = await this.getFromVietQR(items[0].taxId);
+        if (firstCompany) {
+          await db.saveCompany(firstCompany);
+          items[0].name = firstCompany.name || items[0].name;
+          items[0].address = firstCompany.address || items[0].address;
+        }
+      } catch (e) {}
+
+      return {
+        success: true,
+        isDirect: items.length === 1,
+        fromSerper: true,
+        items,
+        currentPage: 1,
+        maxPage: 1,
+        totalFound: items.length
+      };
+    } catch (e) {
+      console.warn('[Serper Error]', e.message);
+      return null;
+    }
+  }
+
   async search(query, type = 'auto', page = 1) {
     const q = query ? query.trim() : '';
     if (!q) {
@@ -399,7 +473,14 @@ export class MasothueCrawler {
       return googleResult;
     }
 
-    // --- FALLBACK 3: If query contains tax digits, try VietQR ---
+    // --- FALLBACK 3: Serper.dev Google Search API ---
+    const serperResult = await this.searchViaSerper(effectiveQ);
+    if (serperResult && serperResult.items && serperResult.items.length > 0) {
+      this.setCache(cacheKey, serperResult);
+      return serperResult;
+    }
+
+    // --- FALLBACK 4: If query contains tax digits, try VietQR ---
     const cleanTaxDigits = q.replace(/\D/g, '');
     if (cleanTaxDigits.length >= 10) {
       const vFallback = await this.getFromVietQR(cleanTaxDigits.slice(0, 10));

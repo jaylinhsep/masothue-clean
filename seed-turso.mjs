@@ -54,6 +54,14 @@ async function main() {
     }
   }
 
+  // Validate & normalize Turso URL if token was pasted by accident
+  if (process.env.TURSO_DATABASE_URL && process.env.TURSO_DATABASE_URL.startsWith('eyJ')) {
+    if (!process.env.TURSO_AUTH_TOKEN) {
+      process.env.TURSO_AUTH_TOKEN = process.env.TURSO_DATABASE_URL;
+    }
+    process.env.TURSO_DATABASE_URL = 'libsql://masothue-db-ravinpham.aws-ap-northeast-1.turso.io';
+  }
+
   // If still not configured for Turso
   if (!process.env.TURSO_DATABASE_URL && !process.env.TURSO_DATABA) {
     console.log('⚠️ CHÚ Ý: Chưa thấy cấu hình Turso Cloud trên máy tính này.');
