@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { db } from './database.mjs';
 
 export class MasothueCrawler {
   constructor() {
@@ -21,6 +22,7 @@ export class MasothueCrawler {
   }
 
   updateCookiesFromHeaders(headers) {
+    if (!headers) return;
     const setCookie = headers.getSetCookie ? headers.getSetCookie() : [headers.get('set-cookie')].filter(Boolean);
     for (const cookieStr of setCookie) {
       if (!cookieStr) continue;
@@ -33,41 +35,69 @@ export class MasothueCrawler {
     }
   }
 
+  getBrowserHeaders(isAjax = false) {
+    const base = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+      'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Cookie': this.getCookieHeader(),
+      'Referer': this.baseUrl + '/'
+    };
+
+    if (isAjax) {
+      base['Accept'] = 'application/json, text/javascript, */*; q=0.01';
+      base['Origin'] = this.baseUrl;
+      base['X-Requested-With'] = 'XMLHttpRequest';
+      base['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
+      base['Sec-Fetch-Dest'] = 'empty';
+      base['Sec-Fetch-Mode'] = 'cors';
+      base['Sec-Fetch-Site'] = 'same-origin';
+    } else {
+      base['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
+      base['Sec-Fetch-Dest'] = 'document';
+      base['Sec-Fetch-Mode'] = 'navigate';
+      base['Sec-Fetch-Site'] = 'none';
+      base['Upgrade-Insecure-Requests'] = '1';
+    }
+    return base;
+  }
+
   async ensureSession(forceFresh = false) {
     if (!forceFresh && this.token && (Date.now() - this.tokenTime < 10 * 60 * 1000)) {
       return this.token;
     }
 
-    // Step 1: Hit homepage to get initial cookies
-    const homeRes = await fetch(this.baseUrl + '/', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Cookie': this.getCookieHeader()
+    try {
+      // Step 1: Hit homepage to get initial cookies
+      const homeRes = await fetch(this.baseUrl + '/', {
+        headers: this.getBrowserHeaders(false)
+      });
+      this.updateCookiesFromHeaders(homeRes.headers);
+
+      // Step 2: Fetch token with complete browser headers
+      const tokenRes = await fetch(this.baseUrl + '/Ajax/Token', {
+        method: 'POST',
+        headers: this.getBrowserHeaders(true),
+        body: 'r=' + Math.random().toString(36).substring(7)
+      });
+      this.updateCookiesFromHeaders(tokenRes.headers);
+
+      const rawText = await tokenRes.text();
+      let tokenData = null;
+      try {
+        tokenData = JSON.parse(rawText);
+      } catch (err) {
+        console.warn(`[Crawler] /Ajax/Token returned non-JSON (Status ${tokenRes.status})`);
       }
-    });
-    this.updateCookiesFromHeaders(homeRes.headers);
 
-    // Step 2: Fetch token
-    const tokenRes = await fetch(this.baseUrl + '/Ajax/Token', {
-      method: 'POST',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Cookie': this.getCookieHeader(),
-        'X-Requested-With': 'XMLHttpRequest',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Referer': this.baseUrl + '/'
-      },
-      body: 'r=' + Math.random().toString(36).substring(7)
-    });
-    this.updateCookiesFromHeaders(tokenRes.headers);
-
-    const tokenData = await tokenRes.json();
-    if (tokenData && tokenData.success && tokenData.token) {
-      this.token = tokenData.token;
-      this.tokenTime = Date.now();
-      return this.token;
+      if (tokenData && tokenData.success && tokenData.token) {
+        this.token = tokenData.token;
+        this.tokenTime = Date.now();
+        return this.token;
+      }
+    } catch (err) {
+      console.warn('[Crawler] Session error:', err.message);
     }
-    throw new Error('Không thể lấy session token từ masothue.com');
+    return null;
   }
 
   getCache(key) {
@@ -82,11 +112,65 @@ export class MasothueCrawler {
 
   setCache(key, data) {
     this.cache.set(key, { data, time: Date.now() });
-    // Clean old cache entries if > 500
     if (this.cache.size > 500) {
       const oldestKey = this.cache.keys().next().value;
       this.cache.delete(oldestKey);
     }
+  }
+
+  slugify(str) {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  // --- Integration: Official VietQR Business API (Direct from Cục Thuế / gdt.gov.vn) ---
+  async getFromVietQR(taxId) {
+    const cleanId = (taxId || '').trim();
+    if (!cleanId || !/^\d{10}(-\d{3})?$/.test(cleanId)) return null;
+
+    try {
+      const res = await fetch(`https://api.vietqr.io/v2/business/${encodeURIComponent(cleanId)}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (json && json.code === '00' && json.data) {
+        const d = json.data;
+        const slug = `${d.id}-${this.slugify(d.name)}`;
+        const company = {
+          name: d.name,
+          url: `/mst/${slug}`,
+          taxId: d.id,
+          taxAddress: d.address || '',
+          address: d.address || '',
+          status: d.status || 'Đang hoạt động',
+          isStatusActive: !d.status || d.status.includes('hoạt động'),
+          internationalName: d.internationalName || '',
+          shortName: d.shortName || '',
+          representative: '',
+          representativeNote: '',
+          phone: '',
+          startDate: '',
+          managedBy: 'Cơ quan Thuế',
+          type: 'Doanh nghiệp',
+          mainIndustry: 'Kinh doanh tổng hợp',
+          lastUpdated: new Date().toLocaleDateString('vi-VN'),
+          industries: []
+        };
+        return company;
+      }
+    } catch (e) {
+      console.warn('[VietQR error]', e.message);
+    }
+    return null;
   }
 
   async search(query, type = 'auto', page = 1) {
@@ -95,12 +179,35 @@ export class MasothueCrawler {
       return { success: false, message: 'Vui lòng nhập từ khóa tìm kiếm (Tên công ty, MST, người đại diện)' };
     }
 
-    // Smart query normalization:
-    // 1. Expand abbreviation: 'cty ' -> 'công ty '
+    // 1. Direct Tax Code check via VietQR API (Lightning-fast, cloud-friendly, zero captcha)
+    const isPureDigits = /^\d{10}(-\d{3})?$/.test(q);
+    if (isPureDigits) {
+      const vCompany = await this.getFromVietQR(q);
+      if (vCompany) {
+        await db.saveCompany(vCompany);
+        return {
+          success: true,
+          isDirect: true,
+          directUrl: vCompany.url,
+          detail: vCompany,
+          items: [{
+            name: vCompany.name,
+            url: vCompany.url,
+            taxId: vCompany.taxId,
+            representative: vCompany.representative,
+            address: vCompany.address,
+            autoExpand: true
+          }],
+          currentPage: 1,
+          maxPage: 1
+        };
+      }
+    }
+
+    // Smart query normalization for masothue:
+    // Expand abbreviation: 'cty ' -> 'công ty '
     let effectiveQ = q.replace(/^cty\s+/i, 'công ty ');
-    // 2. If short keyword (< 5 chars) and not purely digits, prepend 'công ty ' to satisfy masothue minimum length
-    const isPureDigits = /^\d+$/.test(effectiveQ);
-    if (!isPureDigits && effectiveQ.length < 5) {
+    if (!/^\d+$/.test(effectiveQ) && effectiveQ.length < 5) {
       effectiveQ = `công ty ${effectiveQ}`;
     }
 
@@ -110,58 +217,50 @@ export class MasothueCrawler {
       return { ...cached, fromCache: true };
     }
 
+    // Try Masothue crawling session
     let token = await this.ensureSession();
 
-    // Call POST /Ajax/Search
-    const searchBody = new URLSearchParams({
-      q: effectiveQ,
-      type: type || 'auto',
-      token,
-      'force-search': '1'
-    });
-
-    let ajaxRes = await fetch(this.baseUrl + '/Ajax/Search', {
-      method: 'POST',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Cookie': this.getCookieHeader(),
-        'X-Requested-With': 'XMLHttpRequest',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Referer': this.baseUrl + '/'
-      },
-      body: searchBody.toString()
-    });
-
-    // If failed, try refreshing token once
-    let ajaxData = await ajaxRes.json().catch(() => null);
-    if (!ajaxData || ajaxData.url === '/') {
-      token = await this.ensureSession(true);
-      searchBody.set('token', token);
-      ajaxRes = await fetch(this.baseUrl + '/Ajax/Search', {
-        method: 'POST',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Cookie': this.getCookieHeader(),
-          'X-Requested-With': 'XMLHttpRequest',
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Referer': this.baseUrl + '/'
-        },
-        body: searchBody.toString()
+    let ajaxData = null;
+    if (token) {
+      const searchBody = new URLSearchParams({
+        q: effectiveQ,
+        type: type || 'auto',
+        token,
+        'force-search': '1'
       });
-      ajaxData = await ajaxRes.json().catch(() => null);
+
+      try {
+        let ajaxRes = await fetch(this.baseUrl + '/Ajax/Search', {
+          method: 'POST',
+          headers: this.getBrowserHeaders(true),
+          body: searchBody.toString()
+        });
+
+        ajaxData = await ajaxRes.json().catch(() => null);
+
+        // If expired token, retry once
+        if (!ajaxData || ajaxData.url === '/') {
+          token = await this.ensureSession(true);
+          if (token) {
+            searchBody.set('token', token);
+            ajaxRes = await fetch(this.baseUrl + '/Ajax/Search', {
+              method: 'POST',
+              headers: this.getBrowserHeaders(true),
+              body: searchBody.toString()
+            });
+            ajaxData = await ajaxRes.json().catch(() => null);
+          }
+        }
+        if (ajaxRes && ajaxRes.headers) {
+          this.updateCookiesFromHeaders(ajaxRes.headers);
+        }
+      } catch (err) {
+        console.warn('[Crawler] Ajax/Search error:', err.message);
+      }
     }
 
-    this.updateCookiesFromHeaders(ajaxRes.headers);
-
-    if (!ajaxData || ajaxData.success === 0) {
-      return {
-        success: false,
-        message: ajaxData?.message || 'Không tìm thấy kết quả hoặc từ khóa cần ít nhất 5 ký tự.'
-      };
-    }
-
-    // Direct match (Redirects straight to company detail page)
-    if (ajaxData.url && ajaxData.url !== '/') {
+    // Direct match from Masothue (Redirects straight to company detail page)
+    if (ajaxData && ajaxData.url && ajaxData.url !== '/') {
       const detail = await this.getDetail(ajaxData.url);
       const result = {
         success: true,
@@ -183,81 +282,114 @@ export class MasothueCrawler {
       return result;
     }
 
-    // Multiple matches -> fetch HTML search list
-    const searchUrl = new URL(this.baseUrl + '/Search/');
-    searchUrl.searchParams.set('q', effectiveQ);
-    searchUrl.searchParams.set('type', type);
-    searchUrl.searchParams.set('token', token);
-    searchUrl.searchParams.set('force-search', '1');
-    if (page > 1) {
-      searchUrl.searchParams.set('page', page.toString());
+    // Multiple matches from Masothue -> fetch HTML search list
+    if (ajaxData && ajaxData.success === 1 && token) {
+      try {
+        const searchUrl = new URL(this.baseUrl + '/Search/');
+        searchUrl.searchParams.set('q', effectiveQ);
+        searchUrl.searchParams.set('type', type);
+        searchUrl.searchParams.set('token', token);
+        searchUrl.searchParams.set('force-search', '1');
+        if (page > 1) {
+          searchUrl.searchParams.set('page', page.toString());
+        }
+
+        const pageRes = await fetch(searchUrl.toString(), {
+          headers: this.getBrowserHeaders(false)
+        });
+        this.updateCookiesFromHeaders(pageRes.headers);
+
+        const html = await pageRes.text();
+        const $ = cheerio.load(html);
+
+        const items = [];
+        $('div.tax-listing > div').each((_, el) => {
+          const $el = $(el);
+          const titleLink = $el.find('h3 a');
+          const name = titleLink.text().trim();
+          const url = titleLink.attr('href') || $el.attr('data-prefetch');
+          if (!name || !url) return;
+
+          let taxId = '';
+          const taxMatch = $el.html().match(/Mã số thuế:[^<]*<a[^>]*>([^<]+)<\/a>/i);
+          if (taxMatch) taxId = taxMatch[1].trim();
+
+          let representative = '';
+          const repMatch = $el.html().match(/Người đại diện:[^<]*<em><a[^>]*>([^<]+)<\/a><\/em>/i);
+          if (repMatch) representative = repMatch[1].trim();
+
+          const address = $el.find('address').text().replace(/\s+/g, ' ').trim();
+
+          items.push({ name, url, taxId, representative, address });
+        });
+
+        if (items.length > 0) {
+          const totalPages = [1];
+          $('ul.page-numbers li a.page-numbers').each((_, el) => {
+            const p = parseInt($(el).text().trim(), 10);
+            if (!isNaN(p)) totalPages.push(p);
+          });
+          const maxPage = Math.max(...totalPages);
+
+          const result = {
+            success: true,
+            isDirect: false,
+            items,
+            currentPage: page,
+            maxPage,
+            totalFound: items.length
+          };
+          this.setCache(cacheKey, result);
+          return result;
+        }
+      } catch (err) {
+        console.warn('[Crawler] Parse search list error:', err.message);
+      }
     }
 
-    const pageRes = await fetch(searchUrl.toString(), {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Cookie': this.getCookieHeader(),
-        'Referer': this.baseUrl + '/'
+    // --- FALLBACK 1: Search in Indexed Database (Turso / SQLite) ---
+    const dbItems = await db.searchCompanies(q, 20);
+    if (dbItems && dbItems.length > 0) {
+      return {
+        success: true,
+        isDirect: false,
+        fromDb: true,
+        items: dbItems,
+        currentPage: 1,
+        maxPage: 1,
+        totalFound: dbItems.length
+      };
+    }
+
+    // --- FALLBACK 2: If query looks like a Tax ID, try VietQR one more time ---
+    const cleanTaxDigits = q.replace(/\D/g, '');
+    if (cleanTaxDigits.length >= 10) {
+      const vFallback = await this.getFromVietQR(cleanTaxDigits.slice(0, 10));
+      if (vFallback) {
+        await db.saveCompany(vFallback);
+        return {
+          success: true,
+          isDirect: true,
+          directUrl: vFallback.url,
+          detail: vFallback,
+          items: [{
+            name: vFallback.name,
+            url: vFallback.url,
+            taxId: vFallback.taxId,
+            representative: vFallback.representative,
+            address: vFallback.address,
+            autoExpand: true
+          }],
+          currentPage: 1,
+          maxPage: 1
+        };
       }
-    });
-    this.updateCookiesFromHeaders(pageRes.headers);
+    }
 
-    const html = await pageRes.text();
-    const $ = cheerio.load(html);
-
-    const items = [];
-    $('div.tax-listing > div').each((_, el) => {
-      const $el = $(el);
-      const titleLink = $el.find('h3 a');
-      const name = titleLink.text().trim();
-      const url = titleLink.attr('href') || $el.attr('data-prefetch');
-      if (!name || !url) return;
-
-      // Extract MST
-      let taxId = '';
-      const taxMatch = $el.html().match(/Mã số thuế:[^<]*<a[^>]*>([^<]+)<\/a>/i);
-      if (taxMatch) {
-        taxId = taxMatch[1].trim();
-      }
-
-      // Extract Representative
-      let representative = '';
-      const repMatch = $el.html().match(/Người đại diện:[^<]*<em><a[^>]*>([^<]+)<\/a><\/em>/i);
-      if (repMatch) {
-        representative = repMatch[1].trim();
-      }
-
-      // Extract Address
-      const address = $el.find('address').text().replace(/\s+/g, ' ').trim();
-
-      items.push({
-        name,
-        url,
-        taxId,
-        representative,
-        address
-      });
-    });
-
-    // Detect max page from pagination
-    const totalPages = [1];
-    $('ul.page-numbers li a.page-numbers').each((_, el) => {
-      const p = parseInt($(el).text().trim(), 10);
-      if (!isNaN(p)) totalPages.push(p);
-    });
-    const maxPage = Math.max(...totalPages);
-
-    const result = {
-      success: true,
-      isDirect: false,
-      items,
-      currentPage: page,
-      maxPage,
-      totalFound: items.length
+    return {
+      success: false,
+      message: 'Không tìm thấy doanh nghiệp phù hợp. Bạn hãy thử nhập chính xác Mã Số Thuế (10 chữ số) hoặc tên đầy đủ hơn.'
     };
-
-    this.setCache(cacheKey, result);
-    return result;
   }
 
   async getDetail(path) {
@@ -268,109 +400,136 @@ export class MasothueCrawler {
       return { success: true, data: cached, fromCache: true };
     }
 
-    const url = this.baseUrl + cleanPath;
-    await this.ensureSession();
-
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Cookie': this.getCookieHeader(),
-        'Referer': this.baseUrl + '/'
+    // If path is a VietQR slug or contains taxId
+    const taxMatch = cleanPath.match(/\/(\d{10}(-\d{3})?)/);
+    if (taxMatch) {
+      const existingInDb = await db.getCompanyByTaxId(taxMatch[1]);
+      if (existingInDb && existingInDb.data) {
+        return { success: true, data: existingInDb.data, fromDb: true };
       }
-    });
-    this.updateCookiesFromHeaders(res.headers);
-
-    const html = await res.text();
-    const $ = cheerio.load(html);
-
-    const name = $('table.table-taxinfo thead th[itemprop="name"]').text().trim() || $('h1').first().text().trim();
-    if (!name) {
-      return { success: false, message: 'Không tìm thấy thông tin doanh nghiệp này.' };
     }
 
-    const info = {
-      name,
-      url: cleanPath,
-      taxId: '',
-      taxAddress: '',
-      address: '',
-      status: '',
-      isStatusActive: true,
-      internationalName: '',
-      shortName: '',
-      representative: '',
-      representativeNote: '',
-      phone: '',
-      startDate: '',
-      managedBy: '',
-      type: '',
-      mainIndustry: '',
-      lastUpdated: '',
-      industries: []
-    };
+    const url = this.baseUrl + cleanPath;
 
-    $('table.table-taxinfo tbody tr').each((_, tr) => {
-      const $tr = $(tr);
-      const key = $tr.find('td').first().text().replace(/\s+/g, ' ').trim();
-      const valTd = $tr.find('td').last();
+    try {
+      const res = await fetch(url, {
+        headers: this.getBrowserHeaders(false)
+      });
+      this.updateCookiesFromHeaders(res.headers);
 
-      // Remove buttons
-      valTd.find('button').remove();
-      const textVal = valTd.text().replace(/\s+/g, ' ').trim();
-
-      if (key.includes('Mã số thuế')) {
-        info.taxId = textVal;
-      } else if (key.includes('Địa chỉ Thuế')) {
-        info.taxAddress = textVal;
-      } else if (key.includes('Địa chỉ')) {
-        info.address = textVal;
-      } else if (key.includes('Tình trạng')) {
-        info.status = textVal;
-        info.isStatusActive = textVal.toLowerCase().includes('đang hoạt động');
-      } else if (key.includes('Tên quốc tế')) {
-        info.internationalName = textVal;
-      } else if (key.includes('Tên viết tắt')) {
-        info.shortName = textVal;
-      } else if (key.includes('Người đại diện')) {
-        const repName = valTd.find('span[itemprop="name"]').text().trim() || textVal;
-        info.representative = repName;
-        if (textVal.includes('Ngoài ra')) {
-          const parts = textVal.split('Ngoài ra');
-          info.representativeNote = ('Ngoài ra' + parts.slice(1).join('Ngoài ra')).trim();
+      if (!res.ok) {
+        // Fallback to VietQR if taxId is available
+        if (taxMatch) {
+          const vCompany = await this.getFromVietQR(taxMatch[1]);
+          if (vCompany) {
+            await db.saveCompany(vCompany);
+            return { success: true, data: vCompany };
+          }
         }
-      } else if (key.includes('Điện thoại')) {
-        info.phone = textVal;
-      } else if (key.includes('Ngày hoạt động')) {
-        info.startDate = textVal;
-      } else if (key.includes('Quản lý bởi')) {
-        info.managedBy = textVal;
-      } else if (key.includes('Loại hình DN')) {
-        info.type = textVal;
-      } else if (key.includes('Ngành nghề chính')) {
-        info.mainIndustry = textVal;
-      } else if (textVal.includes('Cập nhật mã số thuế')) {
-        info.lastUpdated = textVal;
+        return { success: false, message: `Không thể tải thông tin doanh nghiệp (HTTP ${res.status}).` };
       }
-    });
 
-    // Industries list from table.table
-    $('table.table tbody tr').each((_, tr) => {
-      const $tr = $(tr);
-      const code = $tr.find('td').first().text().trim();
-      const nameTd = $tr.find('td').last();
-      const rawText = nameTd.text().replace(/\s+/g, ' ').trim();
-      if (code && rawText) {
-        info.industries.push({
-          code,
-          name: rawText
-        });
+      const html = await res.text();
+      const $ = cheerio.load(html);
+
+      const name = $('table.table-taxinfo thead th[itemprop="name"]').text().trim() || $('h1').first().text().trim();
+      if (!name) {
+        if (taxMatch) {
+          const vCompany = await this.getFromVietQR(taxMatch[1]);
+          if (vCompany) {
+            await db.saveCompany(vCompany);
+            return { success: true, data: vCompany };
+          }
+        }
+        return { success: false, message: 'Không tìm thấy thông tin doanh nghiệp này.' };
       }
-    });
 
-    this.setCache(cacheKey, info);
-    return {
-      success: true,
-      data: info
-    };
+      const info = {
+        name,
+        url: cleanPath,
+        taxId: '',
+        taxAddress: '',
+        address: '',
+        status: '',
+        isStatusActive: true,
+        internationalName: '',
+        shortName: '',
+        representative: '',
+        representativeNote: '',
+        phone: '',
+        startDate: '',
+        managedBy: '',
+        type: '',
+        mainIndustry: '',
+        lastUpdated: '',
+        industries: []
+      };
+
+      $('table.table-taxinfo tbody tr').each((_, tr) => {
+        const $tr = $(tr);
+        const key = $tr.find('td').first().text().replace(/\s+/g, ' ').trim();
+        const valTd = $tr.find('td').last();
+
+        valTd.find('button').remove();
+        const textVal = valTd.text().replace(/\s+/g, ' ').trim();
+
+        if (key.includes('Mã số thuế')) {
+          info.taxId = textVal;
+        } else if (key.includes('Địa chỉ Thuế')) {
+          info.taxAddress = textVal;
+        } else if (key.includes('Địa chỉ')) {
+          info.address = textVal;
+        } else if (key.includes('Tình trạng')) {
+          info.status = textVal;
+          info.isStatusActive = textVal.toLowerCase().includes('đang hoạt động');
+        } else if (key.includes('Tên quốc tế')) {
+          info.internationalName = textVal;
+        } else if (key.includes('Tên viết tắt')) {
+          info.shortName = textVal;
+        } else if (key.includes('Người đại diện')) {
+          const repName = valTd.find('span[itemprop="name"]').text().trim() || textVal;
+          info.representative = repName;
+          if (textVal.includes('Ngoài ra')) {
+            const parts = textVal.split('Ngoài ra');
+            info.representativeNote = ('Ngoài ra' + parts.slice(1).join('Ngoài ra')).trim();
+          }
+        } else if (key.includes('Điện thoại')) {
+          info.phone = textVal;
+        } else if (key.includes('Ngày hoạt động')) {
+          info.startDate = textVal;
+        } else if (key.includes('Quản lý bởi')) {
+          info.managedBy = textVal;
+        } else if (key.includes('Loại hình DN')) {
+          info.type = textVal;
+        } else if (key.includes('Ngành nghề chính')) {
+          info.mainIndustry = textVal;
+        } else if (textVal.includes('Cập nhật mã số thuế')) {
+          info.lastUpdated = textVal;
+        }
+      });
+
+      $('table.table tbody tr').each((_, tr) => {
+        const $tr = $(tr);
+        const code = $tr.find('td').first().text().trim();
+        const nameTd = $tr.find('td').last();
+        const rawText = nameTd.text().replace(/\s+/g, ' ').trim();
+        if (code && rawText) {
+          info.industries.push({ code, name: rawText });
+        }
+      });
+
+      this.setCache(cacheKey, info);
+      return { success: true, data: info };
+    } catch (err) {
+      console.warn('[Crawler] getDetail error:', err.message);
+      if (taxMatch) {
+        const vCompany = await this.getFromVietQR(taxMatch[1]);
+        if (vCompany) {
+          await db.saveCompany(vCompany);
+          return { success: true, data: vCompany };
+        }
+      }
+      return { success: false, message: 'Lỗi kết nối khi tải chi tiết doanh nghiệp.' };
+    }
   }
 }

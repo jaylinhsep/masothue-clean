@@ -103,7 +103,7 @@ export class Database {
   }
 
   async saveCompany(company) {
-    if (!company || !company.taxId || !company.name) return false;
+    if (!company || !company.taxId || !company.name || !this.client) return false;
 
     let cleanSlug = company.url ? company.url.replace(/^\//, '') : '';
     if (!cleanSlug) {
@@ -155,7 +155,7 @@ export class Database {
   }
 
   async getCompanyByTaxId(taxId) {
-    if (!taxId) return null;
+    if (!taxId || !this.client) return null;
     try {
       const res = await this.client.execute({
         sql: 'SELECT * FROM companies WHERE taxId = ? LIMIT 1',
@@ -173,7 +173,7 @@ export class Database {
   }
 
   async getCompanyBySlug(slug) {
-    if (!slug) return null;
+    if (!slug || !this.client) return null;
     const clean = slug.replace(/^\//, '');
     try {
       // 1. Try exact slug
@@ -199,7 +199,7 @@ export class Database {
   }
 
   async getRelatedCompaniesByRepresentative(representative, currentTaxId, limit = 10) {
-    if (!representative || representative.trim().length < 3) return [];
+    if (!representative || !this.client || representative.trim().length < 3) return [];
     try {
       const res = await this.client.execute({
         sql: `
@@ -219,6 +219,7 @@ export class Database {
   }
 
   async getRecentCompanies(limit = 20) {
+    if (!this.client) return [];
     try {
       const res = await this.client.execute({
         sql: `
@@ -237,6 +238,7 @@ export class Database {
   }
 
   async getCompaniesByProvince(province, limit = 30) {
+    if (!this.client) return [];
     try {
       const res = await this.client.execute({
         sql: `
@@ -251,6 +253,35 @@ export class Database {
       return res.rows || [];
     } catch (err) {
       console.error('[DB] Lỗi getCompaniesByProvince:', err);
+      return [];
+    }
+  }
+
+  async searchCompanies(query, limit = 20) {
+    if (!query || !query.trim() || !this.client) return [];
+    const q = `%${query.trim()}%`;
+    try {
+      const res = await this.client.execute({
+        sql: `
+          SELECT taxId, name, slug, representative, address, status, province, updatedAt 
+          FROM companies 
+          WHERE taxId LIKE ? OR name LIKE ? OR representative LIKE ?
+          ORDER BY updatedAt DESC 
+          LIMIT ?
+        `,
+        args: [q, q, q, limit]
+      });
+      return (res.rows || []).map(r => ({
+        name: r.name,
+        url: `/mst/${r.slug}`,
+        taxId: r.taxId,
+        representative: r.representative,
+        address: r.address,
+        status: r.status,
+        province: r.province
+      }));
+    } catch (err) {
+      console.error('[DB] Lỗi searchCompanies:', err);
       return [];
     }
   }
