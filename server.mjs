@@ -176,15 +176,36 @@ app.get('/api/detail', async (req, res) => {
 
 // API: Debug Crawler connection
 app.get('/api/debug-crawler', async (req, res) => {
+  const diag = {};
   try {
-    const testSearch = await crawler.search('cty vượng phát');
-    res.json({
-      testSearchSuccess: testSearch.success,
-      itemsCount: testSearch.items?.length,
-      sampleItem: testSearch.items?.[0]
-    });
+    const { gotScraping } = await import('got-scraping');
+    
+    // Test Token
+    try {
+      const tokenRes = await gotScraping.post('https://masothue.com/Ajax/Token', {
+        headers: {
+          'referer': 'https://masothue.com/',
+          'origin': 'https://masothue.com',
+          'x-requested-with': 'XMLHttpRequest',
+          'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        },
+        body: 'r=123456',
+        throwHttpErrors: false
+      });
+      diag.tokenStatusCode = tokenRes.statusCode;
+      diag.tokenBodyPreview = tokenRes.body.slice(0, 300);
+      diag.tokenHeaders = tokenRes.headers;
+    } catch (eToken) {
+      diag.tokenError = eToken.message;
+    }
+
+    // Test Search
+    const searchResult = await crawler.search('vượng phát');
+    diag.searchResult = searchResult;
+
+    res.json(diag);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
 
