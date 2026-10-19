@@ -21,8 +21,8 @@ export class Database {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
 
-    const tursoUrl = process.env.TURSO_DATABASE_URL;
-    const tursoToken = process.env.TURSO_AUTH_TOKEN;
+    const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.TURSO_DATABA || process.env.TURSO_URL;
+    const tursoToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN;
 
     if (tursoUrl && tursoToken) {
       console.log(`[DB] Đang kết nối tới Turso Cloud 5GB: ${tursoUrl}`);
