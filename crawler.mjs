@@ -1,64 +1,15 @@
 import * as cheerio from 'cheerio';
+import { gotScraping } from 'got-scraping';
 import { db } from './database.mjs';
 
 export class MasothueCrawler {
   constructor() {
     this.baseUrl = 'https://masothue.com';
-    this.cookies = new Map([
-      ['hm', '1'],
-      ['res', '1920x1080']
-    ]);
     this.token = null;
     this.tokenTime = 0;
     // In-memory cache for search & details (15 minutes TTL)
     this.cache = new Map();
     this.cacheTtl = 15 * 60 * 1000;
-  }
-
-  getCookieHeader() {
-    return Array.from(this.cookies.entries())
-      .map(([k, v]) => `${k}=${v}`)
-      .join('; ');
-  }
-
-  updateCookiesFromHeaders(headers) {
-    if (!headers) return;
-    const setCookie = headers.getSetCookie ? headers.getSetCookie() : [headers.get('set-cookie')].filter(Boolean);
-    for (const cookieStr of setCookie) {
-      if (!cookieStr) continue;
-      const parts = cookieStr.split(';')[0].split('=');
-      if (parts.length >= 2) {
-        const key = parts[0].trim();
-        const val = parts.slice(1).join('=').trim();
-        this.cookies.set(key, val);
-      }
-    }
-  }
-
-  getBrowserHeaders(isAjax = false) {
-    const base = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-      'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Cookie': this.getCookieHeader(),
-      'Referer': this.baseUrl + '/'
-    };
-
-    if (isAjax) {
-      base['Accept'] = 'application/json, text/javascript, */*; q=0.01';
-      base['Origin'] = this.baseUrl;
-      base['X-Requested-With'] = 'XMLHttpRequest';
-      base['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
-      base['Sec-Fetch-Dest'] = 'empty';
-      base['Sec-Fetch-Mode'] = 'cors';
-      base['Sec-Fetch-Site'] = 'same-origin';
-    } else {
-      base['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
-      base['Sec-Fetch-Dest'] = 'document';
-      base['Sec-Fetch-Mode'] = 'navigate';
-      base['Sec-Fetch-Site'] = 'none';
-      base['Upgrade-Insecure-Requests'] = '1';
-    }
-    return base;
   }
 
   async ensureSession(forceFresh = false) {
@@ -67,35 +18,24 @@ export class MasothueCrawler {
     }
 
     try {
-      // Step 1: Hit homepage to get initial cookies
-      const homeRes = await fetch(this.baseUrl + '/', {
-        headers: this.getBrowserHeaders(false)
-      });
-      this.updateCookiesFromHeaders(homeRes.headers);
-
-      // Step 2: Fetch token with complete browser headers
-      const tokenRes = await fetch(this.baseUrl + '/Ajax/Token', {
-        method: 'POST',
-        headers: this.getBrowserHeaders(true),
+      const tokenRes = await gotScraping.post(`${this.baseUrl}/Ajax/Token`, {
+        headers: {
+          'referer': `${this.baseUrl}/`,
+          'origin': this.baseUrl,
+          'x-requested-with': 'XMLHttpRequest',
+          'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        },
         body: 'r=' + Math.random().toString(36).substring(7)
       });
-      this.updateCookiesFromHeaders(tokenRes.headers);
 
-      const rawText = await tokenRes.text();
-      let tokenData = null;
-      try {
-        tokenData = JSON.parse(rawText);
-      } catch (err) {
-        console.warn(`[Crawler] /Ajax/Token returned non-JSON (Status ${tokenRes.status})`);
-      }
-
+      const tokenData = JSON.parse(tokenRes.body);
       if (tokenData && tokenData.success && tokenData.token) {
         this.token = tokenData.token;
         this.tokenTime = Date.now();
         return this.token;
       }
     } catch (err) {
-      console.warn('[Crawler] Session error:', err.message);
+      console.warn('[Crawler] ensureSession error:', err.message);
     }
     return null;
   }
@@ -129,7 +69,7 @@ export class MasothueCrawler {
       .replace(/^-+|-+$/g, '');
   }
 
-  // --- Integration: Official VietQR Business API (Direct from Cục Thuế / gdt.gov.vn) ---
+  // --- Official VietQR Business API (Direct from Cục Thuế / gdt.gov.vn) ---
   async getFromVietQR(taxId) {
     const cleanId = (taxId || '').trim();
     if (!cleanId || !/^\d{10}(-\d{3})?$/.test(cleanId)) return null;
@@ -204,7 +144,7 @@ export class MasothueCrawler {
       }
     }
 
-    // Smart query normalization for masothue:
+    // Smart query normalization:
     // Expand abbreviation: 'cty ' -> 'công ty '
     let effectiveQ = q.replace(/^cty\s+/i, 'công ty ');
     if (!/^\d+$/.test(effectiveQ) && effectiveQ.length < 5) {
@@ -217,7 +157,7 @@ export class MasothueCrawler {
       return { ...cached, fromCache: true };
     }
 
-    // Try Masothue crawling session
+    // 2. Search Masothue using stealth gotScraping (Bypasses Cloudflare JA3 TLS checks)
     let token = await this.ensureSession();
 
     let ajaxData = null;
@@ -230,32 +170,37 @@ export class MasothueCrawler {
       });
 
       try {
-        let ajaxRes = await fetch(this.baseUrl + '/Ajax/Search', {
-          method: 'POST',
-          headers: this.getBrowserHeaders(true),
+        let ajaxRes = await gotScraping.post(`${this.baseUrl}/Ajax/Search`, {
+          headers: {
+            'referer': `${this.baseUrl}/`,
+            'origin': this.baseUrl,
+            'x-requested-with': 'XMLHttpRequest',
+            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
+          },
           body: searchBody.toString()
         });
 
-        ajaxData = await ajaxRes.json().catch(() => null);
+        ajaxData = JSON.parse(ajaxRes.body);
 
         // If expired token, retry once
         if (!ajaxData || ajaxData.url === '/') {
           token = await this.ensureSession(true);
           if (token) {
             searchBody.set('token', token);
-            ajaxRes = await fetch(this.baseUrl + '/Ajax/Search', {
-              method: 'POST',
-              headers: this.getBrowserHeaders(true),
+            ajaxRes = await gotScraping.post(`${this.baseUrl}/Ajax/Search`, {
+              headers: {
+                'referer': `${this.baseUrl}/`,
+                'origin': this.baseUrl,
+                'x-requested-with': 'XMLHttpRequest',
+                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
+              },
               body: searchBody.toString()
             });
-            ajaxData = await ajaxRes.json().catch(() => null);
+            ajaxData = JSON.parse(ajaxRes.body);
           }
         }
-        if (ajaxRes && ajaxRes.headers) {
-          this.updateCookiesFromHeaders(ajaxRes.headers);
-        }
       } catch (err) {
-        console.warn('[Crawler] Ajax/Search error:', err.message);
+        console.warn('[Crawler] gotScraping Ajax/Search error:', err.message);
       }
     }
 
@@ -285,22 +230,16 @@ export class MasothueCrawler {
     // Multiple matches from Masothue -> fetch HTML search list
     if (ajaxData && ajaxData.success === 1 && token) {
       try {
-        const searchUrl = new URL(this.baseUrl + '/Search/');
-        searchUrl.searchParams.set('q', effectiveQ);
-        searchUrl.searchParams.set('type', type);
-        searchUrl.searchParams.set('token', token);
-        searchUrl.searchParams.set('force-search', '1');
-        if (page > 1) {
-          searchUrl.searchParams.set('page', page.toString());
-        }
+        const searchUrl = `${this.baseUrl}/Search/?q=${encodeURIComponent(effectiveQ)}&type=${type || 'auto'}&token=${token}&force-search=1${page > 1 ? `&page=${page}` : ''}`;
 
-        const pageRes = await fetch(searchUrl.toString(), {
-          headers: this.getBrowserHeaders(false)
+        const pageRes = await gotScraping({
+          url: searchUrl,
+          headers: {
+            'referer': `${this.baseUrl}/`
+          }
         });
-        this.updateCookiesFromHeaders(pageRes.headers);
 
-        const html = await pageRes.text();
-        const $ = cheerio.load(html);
+        const $ = cheerio.load(pageRes.body);
 
         const items = [];
         $('div.tax-listing > div').each((_, el) => {
@@ -343,11 +282,11 @@ export class MasothueCrawler {
           return result;
         }
       } catch (err) {
-        console.warn('[Crawler] Parse search list error:', err.message);
+        console.warn('[Crawler] gotScraping search list error:', err.message);
       }
     }
 
-    // --- FALLBACK 1: Search in Indexed Database (Turso / SQLite) ---
+    // --- FALLBACK 1: Search in Indexed Database (Turso Cloud / SQLite) ---
     const dbItems = await db.searchCompanies(q, 20);
     if (dbItems && dbItems.length > 0) {
       return {
@@ -361,7 +300,7 @@ export class MasothueCrawler {
       };
     }
 
-    // --- FALLBACK 2: If query looks like a Tax ID, try VietQR one more time ---
+    // --- FALLBACK 2: If query contains tax digits, try VietQR ---
     const cleanTaxDigits = q.replace(/\D/g, '');
     if (cleanTaxDigits.length >= 10) {
       const vFallback = await this.getFromVietQR(cleanTaxDigits.slice(0, 10));
@@ -400,7 +339,6 @@ export class MasothueCrawler {
       return { success: true, data: cached, fromCache: true };
     }
 
-    // If path is a VietQR slug or contains taxId
     const taxMatch = cleanPath.match(/\/(\d{10}(-\d{3})?)/);
     if (taxMatch) {
       const existingInDb = await db.getCompanyByTaxId(taxMatch[1]);
@@ -412,13 +350,14 @@ export class MasothueCrawler {
     const url = this.baseUrl + cleanPath;
 
     try {
-      const res = await fetch(url, {
-        headers: this.getBrowserHeaders(false)
+      const res = await gotScraping({
+        url,
+        headers: {
+          'referer': `${this.baseUrl}/`
+        }
       });
-      this.updateCookiesFromHeaders(res.headers);
 
-      if (!res.ok) {
-        // Fallback to VietQR if taxId is available
+      if (res.statusCode !== 200) {
         if (taxMatch) {
           const vCompany = await this.getFromVietQR(taxMatch[1]);
           if (vCompany) {
@@ -426,11 +365,10 @@ export class MasothueCrawler {
             return { success: true, data: vCompany };
           }
         }
-        return { success: false, message: `Không thể tải thông tin doanh nghiệp (HTTP ${res.status}).` };
+        return { success: false, message: `Không thể tải thông tin doanh nghiệp (HTTP ${res.statusCode}).` };
       }
 
-      const html = await res.text();
-      const $ = cheerio.load(html);
+      const $ = cheerio.load(res.body);
 
       const name = $('table.table-taxinfo thead th[itemprop="name"]').text().trim() || $('h1').first().text().trim();
       if (!name) {
