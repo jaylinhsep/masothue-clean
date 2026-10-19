@@ -1,4 +1,5 @@
 import readline from 'readline';
+import fs from 'fs';
 import { db } from './database.mjs';
 import { MasothueCrawler } from './crawler.mjs';
 
@@ -9,31 +10,51 @@ const rl = readline.createInterface({
 
 const ask = (query) => new Promise(resolve => rl.question(query, resolve));
 
-// Danh sách từ khóa ngành nghề phổ biến để tự động nạp dữ liệu SEO
-const DEFAULT_KEYWORDS = [
-  'vượng phát',
-  'thịnh vượng',
-  'bất động sản',
-  'xây dựng',
-  'thương mại',
-  'vận tải',
-  'logistics',
-  'công nghệ thông tin',
-  'dịch vụ du lịch',
-  'xuất nhập khẩu',
-  'nội thất',
-  'dược phẩm',
-  'thực phẩm',
-  'tư vấn đầu tư',
-  'năng lượng',
-  'truyền thông',
-  'quảng cáo',
-  'cơ khí',
-  'may mặc',
-  'giáo dục'
+// Kho từ khóa phong phú đa ngành nghề
+const INDUSTRIES = [
+  'bất động sản', 'xây dựng', 'thương mại', 'vận tải', 'logistics',
+  'công nghệ thông tin', 'dịch vụ du lịch', 'xuất nhập khẩu', 'nội thất', 'dược phẩm',
+  'thực phẩm', 'tư vấn đầu tư', 'năng lượng', 'truyền thông', 'quảng cáo',
+  'cơ khí', 'may mặc', 'giáo dục', 'tài chính', 'nông nghiệp',
+  'y tế', 'mỹ phẩm', 'bảo hiểm', 'khoáng sản', 'hóa chất',
+  'bao bì', 'in ấn', 'nhà hàng', 'khách sạn', 'phần mềm',
+  'kiến trúc', 'điện tử', 'thủy sản', 'bảo vệ', 'vệ sinh công nghiệp'
 ];
 
-import fs from 'fs';
+// Kho tỉnh thành & địa bàn trọng điểm
+const PROVINCES = [
+  'Hà Nội', 'TP Hồ Chí Minh', 'Đà Nẵng', 'Hải Phòng', 'Cần Thơ',
+  'Bình Dương', 'Đồng Nai', 'Bà Rịa Vũng Tàu', 'Long An', 'Bắc Ninh',
+  'Quảng Ninh', 'Thanh Hóa', 'Nghệ An', 'Khánh Hòa', 'Lâm Đồng',
+  'Thừa Thiên Huế', 'Kiên Giang', 'Bình Định', 'Bình Phước', 'Quảng Nam',
+  'Hải Dương', 'Vĩnh Phúc', 'Nam Định', 'Thái Nguyên', 'Bắc Giang'
+];
+
+// Từ khóa thương hiệu / phong thủy kinh doanh
+const BRAND_TERMS = [
+  'vượng phát', 'thịnh vượng', 'phát đạt', 'đại phát', 'hưng thịnh',
+  'toàn cầu', 'việt nam', 'đông á', 'á châu', 'phú quý',
+  'an bình', 'minh quang', 'tiến phát', 'hòa bình', 'tân phát',
+  'sơn hà', 'đại việt', 'phương đông', 'hoàng gia', 'phúc hưng',
+  'nam việt', 'bảo an', 'thành công', 'khang thịnh', 'hưng phát',
+  'việt nhật', 'việt hàn', 'hải âu', 'kim ngân', 'việt á',
+  'sao mai', 'hoàng long', 'phát tiến', 'thiên long', 'đại nam'
+];
+
+function shuffleArray(arr) {
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+function getRandomCombination() {
+  const ind = INDUSTRIES[Math.floor(Math.random() * INDUSTRIES.length)];
+  const prov = PROVINCES[Math.floor(Math.random() * PROVINCES.length)];
+  return `${ind} ${prov}`;
+}
 
 async function main() {
   console.log('\n=============================================================');
@@ -65,7 +86,6 @@ async function main() {
   // If still not configured for Turso
   if (!process.env.TURSO_DATABASE_URL && !process.env.TURSO_DATABA) {
     console.log('⚠️ CHÚ Ý: Chưa thấy cấu hình Turso Cloud trên máy tính này.');
-    console.log('Để dữ liệu nạp từ máy tính tự động xuất hiện trên web mst0.com:');
     const ans = await ask('Bạn có muốn kết nối thẳng tới Turso Cloud không? (Y/n): ');
     if (ans.trim().toLowerCase() !== 'n') {
       const defaultUrl = 'libsql://masothue-db-ravinpham.aws-ap-northeast-1.turso.io';
@@ -89,64 +109,86 @@ async function main() {
   console.log(`[Số lượng hiện tại] Đang có: ${statsBefore.total} doanh nghiệp trong Database\n`);
 
   console.log('Chọn chế độ nạp:');
-  console.log('1. Tự động nạp theo 20 nhóm ngành nghề lớn (Hơn 400 doanh nghiệp)');
-  console.log('2. Nhập từ khóa tùy chọn (ví dụ: vượng phát, fpt, quận 1, hà nội...)');
+  console.log('1. 🎲 Nạp NGẪU NHIÊN 40 từ khóa (Được xáo trộn hoàn toàn, không lặp lại)');
+  console.log('2. ♾️  Chế độ TREO MÁY VÔ TẬN (Ghép ngẫu nhiên Ngành nghề + Tỉnh thành, chạy liên tục)');
+  console.log('3. ✍️  Nhập từ khóa tùy chọn (ví dụ: FPT, Viettel, Quận 1, Hà Nội...)');
   
-  const choice = await ask('\nNhập lựa chọn của bạn (1 hoặc 2) [Mặc định 1]: ');
+  const choice = await ask('\nNhập lựa chọn của bạn (1, 2 hoặc 3) [Mặc định 1]: ');
   
+  let isInfinite = false;
   let keywords = [];
+
   if (choice.trim() === '2') {
-    const custom = await ask('Nhập từ khóa bạn muốn cào nạp: ');
+    isInfinite = true;
+    console.log('\n⚡ Đã bật CHẾ ĐỘ TREO MÁY VÔ TẬN. Hệ thống sẽ liên tục tạo từ khóa ngẫu nhiên.');
+    console.log('   (Bạn có thể bấm Ctrl + C bất cứ lúc nào để dừng lại an toàn)\n');
+  } else if (choice.trim() === '3') {
+    const custom = await ask('Nhập từ khóa bạn muốn cào nạp (phân cách bằng dấu phẩy nếu nhiều): ');
     if (custom.trim()) {
-      keywords = [custom.trim()];
+      keywords = custom.split(',').map(s => s.trim()).filter(Boolean);
     } else {
-      keywords = DEFAULT_KEYWORDS;
+      keywords = shuffleArray([...INDUSTRIES, ...BRAND_TERMS]).slice(0, 40);
     }
   } else {
-    keywords = DEFAULT_KEYWORDS;
+    // Chế độ 1: Xáo trộn ngẫu nhiên hoàn toàn
+    keywords = shuffleArray([...INDUSTRIES, ...BRAND_TERMS]).slice(0, 40);
   }
 
-  console.log(`\n🚀 Bắt đầu cào và nạp dữ liệu cho ${keywords.length} từ khóa...\n`);
   let totalSaved = 0;
+  let loopIndex = 0;
 
-  for (let i = 0; i < keywords.length; i++) {
-    const kw = keywords[i];
-    console.log(`\n[${i + 1}/${keywords.length}] Đang tìm kiếm từ khóa: "${kw}"...`);
+  while (true) {
+    loopIndex++;
+    let kw = '';
+
+    if (isInfinite) {
+      kw = getRandomCombination();
+    } else {
+      if (loopIndex > keywords.length) break;
+      kw = keywords[loopIndex - 1];
+    }
+
+    const progressLabel = isInfinite ? `[Vòng ${loopIndex}]` : `[${loopIndex}/${keywords.length}]`;
+    console.log(`\n${progressLabel} 🔍 Đang tìm kiếm từ khóa: "${kw}"...`);
     
     try {
       const res = await crawler.search(kw, 'auto', 1);
       if (res && res.items && res.items.length > 0) {
         console.log(`   -> Tìm thấy ${res.items.length} công ty. Đang lưu vào Database...`);
+        let savedInBatch = 0;
+        
         for (const item of res.items) {
+          if (!item.taxId) continue;
           try {
-            // Lấy chi tiết hoặc dùng VietQR để lấy thông tin đầy đủ nhất
-            let detailData = null;
-            if (item.taxId) {
-              detailData = await crawler.getFromVietQR(item.taxId);
-            }
-            if (!detailData && item.url) {
-              const dRes = await crawler.getDetail(item.url);
-              if (dRes.success) detailData = dRes.data;
-            }
+            // Lưu trực tiếp thông tin chuẩn xác từ kết quả tìm kiếm (Siêu nhanh & Không lo bị rate limit)
+            const companyToSave = {
+              taxId: item.taxId,
+              name: item.name,
+              representative: item.representative || '',
+              address: item.address || '',
+              status: 'Đang hoạt động'
+            };
 
-            if (detailData) {
-              await db.saveCompany(detailData);
+            const saved = await db.saveCompany(companyToSave);
+            if (saved) {
               totalSaved++;
-              process.stdout.write(`   ✓ Đã lưu: ${detailData.name.slice(0, 45)}... (MST: ${detailData.taxId})\n`);
+              savedInBatch++;
+              process.stdout.write(`   ✓ [${item.taxId}] ${item.name.slice(0, 48)}\n`);
             }
-          } catch (e) {
-            // ignore item error
+          } catch (itemErr) {
+            // Bỏ qua lỗi từng item đơn lẻ
           }
         }
+        console.log(`   -> Hoàn tất lưu ${savedInBatch}/${res.items.length} công ty.`);
       } else {
-        console.log(`   -> Không tìm thấy kết quả cho "${kw}".`);
+        console.log(`   -> Không có kết quả mới cho "${kw}". Tiếp tục từ khóa tiếp theo.`);
       }
     } catch (err) {
-      console.log(`   -> Lỗi khi cào từ khóa "${kw}": ${err.message}`);
+      console.log(`   ⚠️ Lỗi cào từ khóa "${kw}": ${err.message}. Tự động bỏ qua.`);
     }
 
-    // Nghỉ nhẹ 1 giây giữa các từ khóa để tránh spam
-    await new Promise(r => setTimeout(r, 1000));
+    // Nghỉ nhẹ 1.2 giây để giữ kết nối mượt mà và không bị Cloudflare soi
+    await new Promise(r => setTimeout(r, 1200));
   }
 
   const statsAfter = await db.getStats();
