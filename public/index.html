@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tra Cứu Mã Số Thuế - Phiên Bản Sạch (Không Quảng Cáo)</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%2232%22%20height=%2232%22><text y=%2224%22 font-size=%2224%22>🏢</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=2">
+</head>
+<body class="light-theme">
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Header -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="brand" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 21h18"/>
+            <path d="M3 7v14"/>
+            <path d="M21 7v14"/>
+            <path d="M6 10h2"/>
+            <path d="M6 14h2"/>
+            <path d="M6 18h2"/>
+            <path d="M16 10h2"/>
+            <path d="M16 14h2"/>
+            <path d="M16 18h2"/>
+            <path d="M10 21V3h4v18"/>
+          </svg>
+        </div>
+        <div>
+          <span class="brand-title">Mã Số Thuế <span class="clean-badge">Bản Sạch</span></span>
+          <span class="brand-subtitle">Tra cứu thông tin công ty • Không quảng cáo • Tốc độ cao</span>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <button id="btn-open-history" class="btn-icon" title="Lịch sử tra cứu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span class="btn-label">Lịch sử</span>
+        </button>
+
+        <button id="btn-open-bookmarks" class="btn-icon" title="Doanh nghiệp đã lưu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span class="btn-label">Đã lưu (<span id="bookmark-count">0</span>)</span>
+        </button>
+
+        <button id="btn-theme-toggle" class="btn-icon" title="Chuyển chế độ Sáng / Tối">
+          <svg id="theme-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+          </svg>
+          <svg id="theme-icon-sun" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <!-- Hero Search Section -->
+    <section class="hero-section">
+      <div class="hero-inner">
+        <h1 class="hero-title">Tra cứu thông tin doanh nghiệp Việt Nam</h1>
+        <p class="hero-desc">Nhập tên công ty, mã số thuế hoặc người đại diện để xem dữ liệu đầy đủ ngay lập tức.</p>
+
+        <!-- Search Box -->
+        <div class="search-container">
+          <form id="search-form" class="search-form">
+            <div class="search-type-wrapper">
+              <select id="search-type" class="search-type-select">
+                <option value="auto">🔍 Tự động nhận diện</option>
+                <option value="enterpriseName">🏢 Tên công ty</option>
+                <option value="enterpriseTax">🔢 Mã số thuế</option>
+                <option value="legalName">👤 Người đại diện</option>
+              </select>
+            </div>
+
+            <div class="search-input-wrapper">
+              <input 
+                type="text" 
+                id="search-input" 
+                class="search-input" 
+                placeholder="Ví dụ: Viettel, FPT, 0100109106, Vinamilk..." 
+                autocomplete="off"
+                autofocus
+                required
+              >
+              <button type="button" id="btn-clear-input" class="btn-clear hidden" title="Xóa từ khóa">✕</button>
+            </div>
+
+            <button type="submit" id="btn-search" class="btn-primary">
+              <span class="btn-text">Tìm kiếm</span>
+              <span class="btn-spinner hidden"></span>
+            </button>
+          </form>
+
+          <!-- Quick Suggestion Chips -->
+          <div class="quick-chips">
+            <span class="chip-label">Gợi ý nhanh:</span>
+            <button class="chip" data-query="0100109106">0100109106 (Viettel)</button>
+            <button class="chip" data-query="0101248141">0101248141 (FPT)</button>
+            <button class="chip" data-query="0300588569">0300588569 (Vinamilk)</button>
+            <button class="chip" data-query="Tập đoàn Vingroup">Vingroup</button>
+            <button class="chip" data-query="Thế Giới Di Động">Thế Giới Di Động</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Results Container -->
+    <section id="results-section" class="results-section hidden">
+      <div class="results-container">
+        <!-- Results Header -->
+        <div class="results-header">
+          <div>
+            <h2 id="results-title" class="results-heading">Kết quả tìm kiếm</h2>
+            <p id="results-count" class="results-meta"></p>
+          </div>
+          <div id="results-filters" class="results-tools"></div>
+        </div>
+
+        <!-- Cards Grid -->
+        <div id="results-grid" class="results-grid"></div>
+
+        <!-- Pagination Controls -->
+        <div id="pagination-container" class="pagination-container hidden">
+          <button id="btn-prev-page" class="btn-page" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            Trang trước
+          </button>
+          <div id="page-numbers" class="page-numbers-list"></div>
+          <button id="btn-next-page" class="btn-page">
+            Trang sau
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Empty / Welcome State -->
+    <section id="welcome-section" class="welcome-section">
+      <!-- Recent Companies Database (SEO internal links & Freshness) -->
+      <div id="recent-companies-block" class="recent-companies-block" style="margin-bottom: 36px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+          <h3 style="font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+            <span>⚡ Doanh nghiệp tra cứu gần đây</span>
+            <span class="clean-badge" style="font-size: 0.7rem;">Đã lưu DB</span>
+          </h3>
+          <span id="db-total-count" style="font-size: 0.85rem; color: var(--text-muted);"></span>
+        </div>
+        <div id="recent-grid" class="features-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;"></div>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon feature-blue">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+            </svg>
+          </div>
+          <h3>Không một mẩu quảng cáo</h3>
+          <p>Loại bỏ 100% banner, popup, video tự phát phiền toái, giúp bạn tập trung 100% vào việc tra cứu.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon feature-emerald">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+          </div>
+          <h3>Tốc độ phản hồi cực nhanh</h3>
+          <p>Tự động duy trì phiên làm việc ngầm, có bộ nhớ đệm (cache) giúp tải lại thông tin chỉ trong vài phần trăm giây.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon feature-purple">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+              <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+            </svg>
+          </div>
+          <h3>1-Click Copy & Xuất dữ liệu</h3>
+          <p>Sao chép nhanh mã số thuế, địa chỉ, người đại diện hoặc xuất trọn vẹn tóm tắt công ty sang Zalo, Excel, Email.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon feature-amber">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+          </div>
+          <h3>Ngành nghề kinh doanh đầy đủ</h3>
+          <p>Xem toàn bộ danh mục ngành nghề đã đăng ký kèm mã ngành chuẩn và công cụ lọc tìm kiếm tức thì.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Error / Loading Overlay State -->
+    <div id="loading-state" class="state-container hidden">
+      <div class="spinner-large"></div>
+      <p class="state-text">Đang kết nối và lấy dữ liệu trực tiếp từ nguồn...</p>
+    </div>
+
+    <div id="error-state" class="state-container hidden">
+      <div class="state-icon-error">⚠️</div>
+      <h3 id="error-title" class="state-heading">Không tìm thấy kết quả</h3>
+      <p id="error-message" class="state-text"></p>
+      <button id="btn-retry" class="btn-secondary">Thử lại</button>
+    </div>
+  </main>
+
+  <!-- Detail Modal -->
+  <div id="detail-modal" class="modal-backdrop hidden">
+    <div class="modal-dialog">
+      <!-- Modal Header -->
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <div class="modal-status-row">
+            <span id="detail-status-badge" class="status-badge">Đang hoạt động</span>
+            <span id="detail-type-badge" class="type-badge">Doanh nghiệp</span>
+          </div>
+          <h2 id="detail-name" class="modal-company-name">Tên Công Ty</h2>
+          <div id="detail-subnames" class="modal-subnames"></div>
+        </div>
+        <button id="btn-close-modal" class="modal-close" title="Đóng (Phím Esc)">✕</button>
+      </div>
+
+      <!-- Modal Toolbar -->
+      <div class="modal-toolbar">
+        <button id="btn-copy-summary" class="btn-tool" title="Sao chép tóm tắt đầy đủ">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+          </svg>
+          <span>Sao chép tóm tắt</span>
+        </button>
+
+        <button id="btn-toggle-bookmark-detail" class="btn-tool" title="Lưu doanh nghiệp">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span id="bookmark-detail-label">Lưu vào danh sách</span>
+        </button>
+
+        <button id="btn-export-json" class="btn-tool" title="Xuất file JSON">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>Xuất JSON</span>
+        </button>
+
+        <a id="btn-open-source" href="#" target="_blank" rel="noopener noreferrer" class="btn-tool link-external" title="Mở trang gốc masothue.com">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+          <span>Xem gốc</span>
+        </a>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="modal-body">
+        <!-- Key Tax Code Card Highlight -->
+        <div class="mst-highlight-card">
+          <div class="mst-label">MÃ SỐ THUẾ</div>
+          <div class="mst-value-row">
+            <span id="detail-taxid" class="mst-code">0000000000</span>
+            <button id="btn-copy-mst" class="btn-copy-mst" title="Sao chép Mã số thuế">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+              </svg>
+              <span>Sao chép</span>
+            </button>
+          </div>
+          <div id="detail-last-updated" class="mst-updated"></div>
+        </div>
+
+        <!-- Info Grid -->
+        <div class="detail-grid">
+          <!-- Address Card -->
+          <div class="detail-card full-width">
+            <div class="card-icon">📍</div>
+            <div class="card-content">
+              <div class="card-label">Địa chỉ trụ sở</div>
+              <div id="detail-address" class="card-value">-</div>
+              <div id="detail-tax-address-box" class="sub-address hidden">
+                <span class="sub-label">Địa chỉ khai thuế:</span>
+                <span id="detail-tax-address"></span>
+              </div>
+            </div>
+            <button class="btn-copy-small" onclick="copyDetailField('detail-address')" title="Sao chép địa chỉ">Sao chép</button>
+          </div>
+
+          <!-- Representative Card -->
+          <div class="detail-card">
+            <div class="card-icon">👤</div>
+            <div class="card-content">
+              <div class="card-label">Người đại diện pháp luật</div>
+              <div id="detail-representative" class="card-value font-highlight">-</div>
+              <div id="detail-rep-note" class="rep-note hidden"></div>
+            </div>
+          </div>
+
+          <!-- Phone Card -->
+          <div class="detail-card">
+            <div class="card-icon">📞</div>
+            <div class="card-content">
+              <div class="card-label">Số điện thoại</div>
+              <div id="detail-phone" class="card-value font-mono">-</div>
+            </div>
+          </div>
+
+          <!-- Registration Date -->
+          <div class="detail-card">
+            <div class="card-icon">📅</div>
+            <div class="card-content">
+              <div class="card-label">Ngày bắt đầu hoạt động</div>
+              <div id="detail-startdate" class="card-value font-mono">-</div>
+            </div>
+          </div>
+
+          <!-- Managed By -->
+          <div class="detail-card">
+            <div class="card-icon">🏛️</div>
+            <div class="card-content">
+              <div class="card-label">Cơ quan thuế quản lý</div>
+              <div id="detail-managedby" class="card-value">-</div>
+            </div>
+          </div>
+
+          <!-- Enterprise Type -->
+          <div class="detail-card full-width">
+            <div class="card-icon">📑</div>
+            <div class="card-content">
+              <div class="card-label">Loại hình doanh nghiệp</div>
+              <div id="detail-type" class="card-value">-</div>
+            </div>
+          </div>
+
+          <!-- Main Industry -->
+          <div class="detail-card full-width">
+            <div class="card-icon">⭐</div>
+            <div class="card-content">
+              <div class="card-label">Ngành nghề kinh doanh chính</div>
+              <div id="detail-main-industry" class="card-value font-highlight">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Industries Registered Section -->
+        <div id="industries-section" class="industries-section hidden">
+          <div class="industries-header">
+            <h3>Danh sách ngành nghề đã đăng ký (<span id="industries-count">0</span>)</h3>
+            <input 
+              type="text" 
+              id="filter-industries-input" 
+              class="filter-industries-input" 
+              placeholder="🔍 Lọc ngành theo mã hoặc tên..."
+            >
+          </div>
+          <div class="industries-table-wrapper">
+            <table class="industries-table">
+              <thead>
+                <tr>
+                  <th style="width: 90px;">Mã ngành</th>
+                  <th>Tên ngành nghề / Chi tiết hoạt động</th>
+                </tr>
+              </thead>
+              <tbody id="industries-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drawer: Lịch sử tra cứu -->
+  <div id="drawer-history" class="drawer-backdrop hidden">
+    <div class="drawer">
+      <div class="drawer-header">
+        <h3>Lịch sử tra cứu</h3>
+        <button id="btn-close-history" class="modal-close">✕</button>
+      </div>
+      <div class="drawer-actions">
+        <button id="btn-clear-history" class="btn-text-danger">Xóa tất cả lịch sử</button>
+      </div>
+      <div id="history-list" class="drawer-list"></div>
+    </div>
+  </div>
+
+  <!-- Drawer: Đã lưu -->
+  <div id="drawer-bookmarks" class="drawer-backdrop hidden">
+    <div class="drawer">
+      <div class="drawer-header">
+        <h3>Doanh nghiệp đã lưu</h3>
+        <button id="btn-close-bookmarks" class="modal-close">✕</button>
+      </div>
+      <div class="drawer-actions">
+        <button id="btn-clear-bookmarks" class="btn-text-danger">Xóa tất cả đã lưu</button>
+      </div>
+      <div id="bookmarks-list" class="drawer-list"></div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-container">
+      <p>Tra Cứu Mã Số Thuế Sạch • Dữ liệu công khai từ Cổng thông tin Quốc gia & masothue.com</p>
+      <p class="footer-sub">Thiết kế tối ưu cho kế toán, pháp chế, nhân sự và người dùng văn phòng.</p>
+    </div>
+  </footer>
+
+  <script src="app.js?v=2"></script>
+</body>
+</html>

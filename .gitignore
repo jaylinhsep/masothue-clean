@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Local Windows portable Node runtime (DO NOT push to Git/Render)
+runtime/
+
+# Local SQLite files & Cache
+data/
+*.db
+*.sqlite
+
+# Environment variables
+.env
+
+# Logs & temp
+*.log
+npm-debug.log*
+.DS_Store
