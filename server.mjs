@@ -174,6 +174,41 @@ app.get('/api/detail', async (req, res) => {
   }
 });
 
+// API: Debug Crawler connection
+app.get('/api/debug-crawler', async (req, res) => {
+  try {
+    const homeRes = await fetch('https://masothue.com/', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+      }
+    });
+    const homeText = await homeRes.text();
+
+    const tokenRes = await fetch('https://masothue.com/Ajax/Token', {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Referer': 'https://masothue.com/',
+        'Origin': 'https://masothue.com',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Accept': 'application/json, text/javascript, */*; q=0.01'
+      },
+      body: 'r=123456'
+    });
+    const tokenText = await tokenRes.text();
+
+    res.json({
+      homeStatus: homeRes.status,
+      homeLength: homeText.length,
+      tokenStatus: tokenRes.status,
+      tokenTextPreview: tokenText.slice(0, 300)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // API: Recent Companies (For Homepage Freshness)
 app.get('/api/recent', async (req, res) => {
   const recent = await db.getRecentCompanies(15);
