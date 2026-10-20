@@ -1,0 +1,37 @@
+{
+  "lastDate": "2026-10-20",
+  "serperUsedToday": 76,
+  "maxSerperPerDay": 2400,
+  "totalSaved": 76,
+  "activeRangeIndex": 0,
+  "ranges": [
+    {
+      "id": "tphcm-2024-2026",
+      "name": "TP. Hồ Chí Minh (Dải mới 2024-2026)",
+      "current": 31805382,
+      "end": 31850000,
+      "province": "TP Hồ Chí Minh"
+    },
+    {
+      "id": "hanoi-2024-2026",
+      "name": "Hà Nội (Dải mới 2024-2026)",
+      "current": 11000000,
+      "end": 11050000,
+      "province": "Hà Nội"
+    },
+    {
+      "id": "binhduong-2024-2026",
+      "name": "Bình Dương (Dải mới 2024-2026)",
+      "current": 37030000,
+      "end": 37035000,
+      "province": "Bình Dương"
+    },
+    {
+      "id": "danang-2024-2026",
+      "name": "Đà Nẵng (Dải mới 2024-2026)",
+      "current": 40200000,
+      "end": 40230000,
+      "province": "Đà Nẵng"
+    }
+  ]
+}

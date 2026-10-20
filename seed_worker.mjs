@@ -218,11 +218,13 @@ async function runWorker() {
 
     if (!vCompany || !vCompany.name) {
       // Mã số thuế này chưa được cấp hoặc chưa hoạt động
-      // Lưu state định kỳ mỗi 10 số
-      if (currentNum % 10 === 0) {
+      // Lưu state định kỳ mỗi 5 số
+      if (currentNum % 5 === 0) {
         saveState(state);
       }
-      await sleep(650);
+      // Giãn cách an toàn 2.5s - 3.2s để bảo vệ IP, tuyệt đối không bị VietQR chặn 429
+      const safeDelay = Math.floor(Math.random() * 700) + 2500;
+      await sleep(safeDelay);
       continue;
     }
 
@@ -270,8 +272,8 @@ async function runWorker() {
 
     saveState(state);
 
-    // Nghỉ ngơi ngắn 600ms - 1200ms giữa các công ty thật để tránh spam
-    const delay = Math.floor(Math.random() * 600) + 600;
+    // Nghỉ ngơi an toàn 3.5s - 5.0s giữa các công ty thật
+    const delay = Math.floor(Math.random() * 1500) + 3500;
     await sleep(delay);
   }
 }
