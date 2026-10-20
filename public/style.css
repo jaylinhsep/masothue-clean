@@ -2524,4 +2524,239 @@ button, a, input, select {
   }
 }
 
+/* ==========================================================================
+   BƯỚC 3: RICH SNIPPETS FAQ, INVOICE HELPER, QR MODAL & RELATED GRIDS
+   ========================================================================== */
+
+/* Invoice copy button highlight */
+.btn-tool-invoice {
+  background: var(--primary-light) !important;
+  color: var(--primary) !important;
+  border-color: var(--primary) !important;
+  font-weight: 600 !important;
+}
+.btn-tool-invoice:hover {
+  background: var(--primary) !important;
+  color: #fff !important;
+}
+
+/* FAQ Accordion Section */
+.ssr-faq-section {
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  margin-top: 28px;
+}
+
+.faq-pill {
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--primary);
+  border-radius: var(--radius-full);
+}
+
+.faq-accordion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.faq-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  overflow: hidden;
+  transition: all 0.15s ease;
+}
+
+.faq-item[open] {
+  border-color: rgba(37, 99, 235, 0.35);
+  box-shadow: var(--shadow-sm);
+}
+
+.faq-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 13px 16px;
+  font-weight: 600;
+  font-size: 0.94rem;
+  color: var(--text-main);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.faq-summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-summary:hover {
+  background: var(--bg-hover);
+}
+
+.faq-chevron {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  margin-left: 12px;
+}
+
+.faq-item[open] .faq-chevron {
+  transform: rotate(180deg);
+  color: var(--primary);
+}
+
+.faq-answer {
+  padding: 12px 16px 16px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  border-top: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.faq-answer strong {
+  color: var(--text-main);
+}
+
+/* Related Companies Grid */
+.related-section {
+  margin-top: 28px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.related-section-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.related-card {
+  display: block;
+  text-decoration: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  transition: all 0.15s ease;
+}
+
+.related-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.related-card-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.related-card-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* QR Code Modal Popup */
+.qr-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+
+.qr-modal-backdrop.active {
+  display: flex;
+}
+
+.qr-modal-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  max-width: 360px;
+  width: 100%;
+  padding: 24px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  text-align: center;
+  position: relative;
+  animation: qrModalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes qrModalPop {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.qr-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-modal-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.qr-image-container {
+  margin: 16px auto;
+  padding: 12px;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  border: 1px solid var(--border);
+}
+
+.qr-image-container img {
+  display: block;
+  width: 180px;
+  height: 180px;
+}
+
+@media (max-width: 768px) {
+  .related-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 

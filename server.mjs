@@ -202,11 +202,19 @@ async function handleCompanyPage(req, res, slug) {
       `);
     }
 
-    // 3. Find related companies under the same representative
-    const related = await db.getRelatedCompaniesByRepresentative(company.representative, company.taxId);
+    // 3. Find related companies under representative, province, and industry
+    const [relatedRep, relatedProvince, relatedIndustry] = await Promise.all([
+      db.getRelatedCompaniesByRepresentative(company.representative, company.taxId),
+      db.getRelatedCompaniesByProvince(company.province || (company.data && company.data.province), company.taxId, 6),
+      db.getRelatedCompaniesByIndustry(company.mainIndustry || (company.data && company.data.mainIndustry), company.taxId, 6)
+    ]);
 
-    // 4. Render Server-Side HTML with Schema.org JSON-LD
-    const html = seoRenderer.renderCompanyPage(company, related, req.headers.host);
+    // 4. Render Server-Side HTML with Schema.org JSON-LD (Corporation + Breadcrumb + FAQPage)
+    const html = seoRenderer.renderCompanyPage(company, {
+      byRepresentative: relatedRep,
+      byProvince: relatedProvince,
+      byIndustry: relatedIndustry
+    }, req.headers.host);
     res.send(html);
   } catch (err) {
     console.error(`[SEO Route Error] ${slug}:`, err);
@@ -222,6 +230,93 @@ app.get('/mst/:slug', async (req, res) => {
 // 3b. SEO Clean Root Slug Page: /0101245486-tap-doan-vingroup... or /1801818511-001-...
 app.get(/^\/(\d{10}.*)/, async (req, res) => {
   return handleCompanyPage(req, res, req.params[0]);
+});
+
+// 3c. Dynamic OpenGraph Social Preview Card (SVG)
+app.get('/api/og/:taxId', async (req, res) => {
+  try {
+    const rawId = (req.params.taxId || '').replace(/\.svg$/i, '');
+    let company = await db.getCompanyByTaxId(rawId);
+    if (!company) {
+      company = await db.getCompanyBySlug(rawId);
+    }
+
+    const d = company ? (company.data || company) : {
+      name: 'Tra Cứu Mã Số Thuế Doanh Nghiệp Toàn Quốc',
+      taxId: rawId,
+      status: 'Đang hoạt động',
+      representative: 'Tổng cục Thuế',
+      province: 'Việt Nam'
+    };
+
+    const escapeXml = (str) => {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    };
+
+    const taxId = escapeXml(d.taxId || rawId);
+    const rawName = d.name || 'Công ty Doanh nghiệp';
+    const truncatedName = escapeXml(rawName.length > 55 ? rawName.slice(0, 52) + '...' : rawName);
+    const statusText = escapeXml(d.status || 'Đang hoạt động');
+    const representative = escapeXml(d.representative || 'Chưa cập nhật');
+    const province = escapeXml(d.province || 'Toàn Quốc');
+
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1329" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  
+  <!-- Accent Line -->
+  <rect x="0" y="0" width="1200" height="8" fill="url(#primaryGrad)"/>
+
+  <!-- Brand pill -->
+  <rect x="80" y="65" width="230" height="42" rx="21" fill="rgba(37,99,235,0.2)" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="195" y="92" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="700" fill="#60a5fa" text-anchor="middle">MST0.COM • TRA CỨU MST</text>
+
+  <!-- Tax ID Highlight -->
+  <text x="80" y="175" font-family="monospace, monospace" font-size="24" font-weight="600" fill="#94a3b8">MÃ SỐ THUẾ DOANH NGHIỆP</text>
+  <text x="80" y="245" font-family="monospace, monospace" font-size="56" font-weight="800" fill="#38bdf8">${taxId}</text>
+
+  <!-- Company Name -->
+  <text x="80" y="330" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="36" font-weight="800" fill="#ffffff">${truncatedName}</text>
+
+  <!-- Status & Representative -->
+  <rect x="80" y="380" width="170" height="38" rx="8" fill="rgba(34,197,94,0.15)" stroke="#22c55e" stroke-width="1"/>
+  <text x="165" y="405" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="600" fill="#4ade80" text-anchor="middle">● ${statusText}</text>
+
+  <text x="275" y="406" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="600" fill="#cbd5e1">Đại diện: ${representative}</text>
+
+  <!-- Province / Location -->
+  <text x="80" y="465" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="500" fill="#94a3b8">📍 Khu vực: ${province}</text>
+
+  <!-- Footer Tagline -->
+  <line x1="80" y1="520" x2="1120" y2="520" stroke="#334155" stroke-width="1"/>
+  <text x="80" y="565" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="500" fill="#64748b">Cổng Thông Tin Doanh Nghiệp Việt Nam • Chuẩn Tổng cục Thuế • Không quảng cáo</text>
+  <text x="1120" y="565" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="700" fill="#38bdf8" text-anchor="end">mst0.com</text>
+</svg>`;
+
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+    res.send(svg);
+  } catch (err) {
+    res.status(500).send('Error generating OG image');
+  }
 });
 
 // ==========================================

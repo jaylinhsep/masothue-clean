@@ -16,11 +16,16 @@ export class SeoRenderer {
   }
 
   getProvinceSlug(name) {
-    if (!name) return 'toan-quoc';
+    if (!name || name === 'Toàn Quốc') return 'toan-quoc';
     const clean = name.toLowerCase().trim();
     const found = VIETNAM_PROVINCES.find(p => p.name.toLowerCase() === clean);
     if (found) return found.slug;
-    return clean.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return clean
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'toan-quoc';
   }
 
   getIndustrySlug(mainIndustry) {
@@ -180,7 +185,7 @@ export class SeoRenderer {
   <title>${this.escape(title)}</title>
   <meta name="description" content="${this.escape(description)}">
   <link rel="canonical" href="${pageUrl}">
-  <link rel="stylesheet" href="/style.css?v=8">
+  <link rel="stylesheet" href="/style.css?v=9">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -309,7 +314,7 @@ export class SeoRenderer {
   <title>${this.escape(title)}</title>
   <meta name="description" content="${this.escape(description)}">
   <link rel="canonical" href="${pageUrl}">
-  <link rel="stylesheet" href="/style.css?v=8">
+  <link rel="stylesheet" href="/style.css?v=9">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -427,7 +432,7 @@ export class SeoRenderer {
   <title>${this.escape(title)}</title>
   <meta name="description" content="${this.escape(description)}">
   <link rel="canonical" href="${pageUrl}">
-  <link rel="stylesheet" href="/style.css?v=8">
+  <link rel="stylesheet" href="/style.css?v=9">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -510,7 +515,7 @@ export class SeoRenderer {
   <title>${this.escape(title)}</title>
   <meta name="description" content="${this.escape(description)}">
   <link rel="canonical" href="${pageUrl}">
-  <link rel="stylesheet" href="/style.css?v=8">
+  <link rel="stylesheet" href="/style.css?v=9">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -613,7 +618,7 @@ export class SeoRenderer {
   <title>${this.escape(title)}</title>
   <meta name="description" content="${this.escape(description)}">
   <link rel="canonical" href="${pageUrl}">
-  <link rel="stylesheet" href="/style.css?v=8">
+  <link rel="stylesheet" href="/style.css?v=9">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -684,6 +689,10 @@ export class SeoRenderer {
     const pageUrl = `${domain}/${cleanSlug}`;
     const d = company.data || company;
     
+    const repList = Array.isArray(relatedCompanies) ? relatedCompanies : (relatedCompanies.byRepresentative || []);
+    const provinceList = Array.isArray(relatedCompanies) ? [] : (relatedCompanies.byProvince || []);
+    const industryList = Array.isArray(relatedCompanies) ? [] : (relatedCompanies.byIndustry || []);
+
     const s = (d.status || '').toLowerCase().trim();
     let statusClass = 'status-active';
     let statusText = d.status || 'Đang hoạt động';
@@ -693,14 +702,68 @@ export class SeoRenderer {
       statusClass = 'status-warning';
     }
 
-    const provinceName = d.province || 'Toàn Quốc';
+    let provinceName = d.province || 'Toàn Quốc';
+    if (provinceName === 'Toàn Quốc' && (d.address || d.taxAddress)) {
+      const addr = (d.address || d.taxAddress || '').toLowerCase();
+      if (addr.includes('hồ chí minh') || addr.includes('tp.hcm') || addr.includes('tp hcm') || addr.includes('sài gòn')) provinceName = 'TP Hồ Chí Minh';
+      else if (addr.includes('hà nội') || addr.includes('ha noi')) provinceName = 'Hà Nội';
+      else if (addr.includes('đà nẵng') || addr.includes('da nang')) provinceName = 'Đà Nẵng';
+      else if (addr.includes('bình dương') || addr.includes('binh duong')) provinceName = 'Bình Dương';
+      else if (addr.includes('đồng nai') || addr.includes('dong nai')) provinceName = 'Đồng Nai';
+      else if (addr.includes('hải phòng') || addr.includes('hai phong')) provinceName = 'Hải Phòng';
+      else if (addr.includes('cần thơ') || addr.includes('can tho')) provinceName = 'Cần Thơ';
+      else {
+        for (const p of VIETNAM_PROVINCES) {
+          if (addr.includes(p.name.toLowerCase())) {
+            provinceName = p.name;
+            break;
+          }
+        }
+      }
+    }
     const provinceSlug = this.getProvinceSlug(provinceName);
     const industrySlug = this.getIndustrySlug(d.mainIndustry);
 
     const pageTitle = `Mã số thuế ${d.taxId} - ${d.name} | Tra Cứu Doanh Nghiệp`;
     const metaDescription = `Tra cứu thông tin mã số thuế ${d.taxId} của ${d.name}. Đại diện: ${d.representative || 'N/A'}. Địa chỉ: ${d.address || d.taxAddress}. Tình trạng: ${statusText}.`;
 
-    // Schema.org JSON-LD (Corporation + Breadcrumb)
+    // 1. Generate Targeted FAQs for Google Rich Snippets Top 0
+    const faqItems = [
+      {
+        q: `Mã số thuế của ${d.name} là bao nhiêu?`,
+        a: `Mã số thuế của ${d.name} là ${d.taxId}, hiện đang được quản lý bởi ${d.managedBy || 'Cơ quan Thuế'}.`
+      },
+      {
+        q: `Người đại diện pháp luật của ${d.name} là ai?`,
+        a: d.representative 
+          ? `Người đại diện theo pháp luật của công ty là ${d.representative}${d.representativeNote ? ` (${d.representativeNote})` : ''}.`
+          : `Thông tin về người đại diện theo pháp luật của ${d.name} đang được cơ quan thuế cập nhật.`
+      },
+      {
+        q: `${d.name} có còn đang hoạt động không?`,
+        a: `Theo dữ liệu đăng ký kinh doanh và cơ quan thuế, ${d.name} hiện có tình trạng: ${statusText}.`
+      },
+      {
+        q: `Địa chỉ trụ sở của ${d.name} ở đâu?`,
+        a: `Doanh nghiệp có địa chỉ trụ sở chính đăng ký tại: ${d.address || d.taxAddress || 'Đang cập nhật'}.`
+      }
+    ];
+
+    if (d.mainIndustry) {
+      faqItems.push({
+        q: `${d.name} kinh doanh trong ngành nghề gì?`,
+        a: `Ngành nghề kinh doanh chính đã đăng ký của công ty là: ${d.mainIndustry}.`
+      });
+    }
+
+    if (d.startDate) {
+      faqItems.push({
+        q: `${d.name} bắt đầu hoạt động từ khi nào?`,
+        a: `Doanh nghiệp chính thức bắt đầu đi vào hoạt động từ ngày ${d.startDate}.`
+      });
+    }
+
+    // Schema.org JSON-LD (Corporation + Breadcrumb + FAQPage)
     const jsonLd = {
       "@context": "https://schema.org",
       "@graph": [
@@ -729,6 +792,18 @@ export class SeoRenderer {
             { "@type": "ListItem", "position": 3, "name": provinceName, "item": `${domain}/tinh-thanh/${provinceSlug}` },
             { "@type": "ListItem", "position": 4, "name": d.name, "item": pageUrl }
           ]
+        },
+        {
+          "@type": "FAQPage",
+          "@id": `${pageUrl}#faq`,
+          "mainEntity": faqItems.map(item => ({
+            "@type": "Question",
+            "name": item.q,
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": item.a
+            }
+          }))
         }
       ]
     };
@@ -749,11 +824,16 @@ export class SeoRenderer {
   <meta property="og:description" content="${this.escape(metaDescription)}">
   <meta property="og:url" content="${pageUrl}">
   <meta property="og:site_name" content="Tra Cứu Mã Số Thuế">
+  <meta property="og:image" content="${domain}/api/og/${d.taxId}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Mã số thuế ${d.taxId} - ${this.escape(d.name)}">
 
   <!-- Twitter -->
-  <meta name="twitter:card" content="summary">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${this.escape(pageTitle)}">
   <meta name="twitter:description" content="${this.escape(metaDescription)}">
+  <meta name="twitter:image" content="${domain}/api/og/${d.taxId}">
 
   <!-- Schema.org JSON-LD Structured Data -->
   <script type="application/ld+json">
@@ -763,7 +843,7 @@ export class SeoRenderer {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=8">
+  <link rel="stylesheet" href="/style.css?v=9">
 </head>
 <body class="light-theme">
   <!-- Toast Container -->
@@ -833,16 +913,22 @@ export class SeoRenderer {
         ` : ''}
       </div>
 
-      <!-- Toolbar -->
-      <div class="modal-toolbar" style="margin: 10px 0 16px; border-radius: var(--radius-sm);">
+      <!-- Toolbar with Invoice Helper & QR -->
+      <div class="modal-toolbar" style="margin: 10px 0 16px; border-radius: var(--radius-sm); flex-wrap: wrap;">
+        <button class="btn-tool btn-tool-invoice" onclick="copyInvoiceInfo()" title="Sao chép tên, MST, địa chỉ để xuất hóa đơn VAT">
+          <span>📋 Sao chép xuất HĐ</span>
+        </button>
         <button class="btn-tool" onclick="copySummaryText()">
           <span>Sao chép tóm tắt</span>
+        </button>
+        <button class="btn-tool" onclick="openQrModal()">
+          <span>📱 Mã QR</span>
         </button>
         <button class="btn-tool" onclick="window.print()">
           <span>In / Xuất PDF</span>
         </button>
         <button class="btn-tool" onclick="copyShareUrl()">
-          <span>Sao chép link chia sẻ</span>
+          <span>Chia sẻ link</span>
         </button>
       </div>
 
@@ -931,19 +1017,93 @@ export class SeoRenderer {
         </div>
       </div>
 
+      <!-- FAQ Section (Google Rich Snippets Top 0) -->
+      <section class="ssr-faq-section">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+          <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 8px;">
+            <span>❓ Câu hỏi thường gặp về ${this.escape(d.name)}</span>
+          </h2>
+          <span class="faq-pill">Tra cứu thông tin thuế</span>
+        </div>
+        
+        <div class="faq-accordion-list">
+          ${faqItems.map((item, idx) => `
+            <details class="faq-item" ${idx === 0 ? 'open' : ''}>
+              <summary class="faq-summary">
+                <span>${idx + 1}. ${this.escape(item.q)}</span>
+                <span class="faq-chevron">▼</span>
+              </summary>
+              <div class="faq-answer">
+                ${this.escape(item.a)}
+              </div>
+            </details>
+          `).join('')}
+        </div>
+      </section>
+
       <!-- Unique Value-Add: Related Companies under same Representative -->
-      ${relatedCompanies && relatedCompanies.length > 0 ? `
-        <div style="margin-top: 28px; border-top: 1px solid var(--border); padding-top: 20px;">
-          <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-            <span>🌐 Doanh nghiệp liên quan cùng người đại diện (${relatedCompanies.length})</span>
+      ${repList && repList.length > 0 ? `
+        <div class="related-section">
+          <h3 class="related-section-title">
+            <span>🌐 Doanh nghiệp liên quan cùng người đại diện (${repList.length})</span>
           </h3>
-          <div style="display: flex; flex-direction: column; gap: 10px;">
-            ${relatedCompanies.map(rel => `
-              <a href="/${this.escape(rel.slug)}" class="drawer-item" style="text-decoration: none; display: block;">
-                <div class="drawer-item-title">${this.escape(rel.name)}</div>
-                <div class="drawer-item-sub">
+          <div class="related-grid">
+            ${repList.map(rel => `
+              <a href="/${this.escape(rel.slug)}" class="related-card">
+                <div class="related-card-title">${this.escape(rel.name)}</div>
+                <div class="related-card-sub">
                   <span>MST: <strong>${this.escape(rel.taxId)}</strong></span>
-                  <span>${this.escape(rel.province || '')} • ${this.escape(rel.status || '')}</span>
+                  <span>•</span>
+                  <span>${this.escape(rel.province || '')}</span>
+                  <span>•</span>
+                  <span>${this.escape(rel.status || '')}</span>
+                </div>
+              </a>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Internal SILO Mesh: Related Companies in Same Province -->
+      ${provinceList && provinceList.length > 0 ? `
+        <div class="related-section">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <h3 class="related-section-title" style="margin-bottom: 0;">
+              <span>📍 Doanh nghiệp cùng khu vực tại ${this.escape(provinceName)}</span>
+            </h3>
+            <a href="/tinh-thanh/${provinceSlug}" class="badge-silo-link" style="font-size: 0.8rem;">Xem tất cả →</a>
+          </div>
+          <div class="related-grid">
+            ${provinceList.map(rel => `
+              <a href="/${this.escape(rel.slug)}" class="related-card">
+                <div class="related-card-title">${this.escape(rel.name)}</div>
+                <div class="related-card-sub">
+                  <span>MST: <strong>${this.escape(rel.taxId)}</strong></span>
+                  ${rel.representative ? `<span>• Đại diện: ${this.escape(rel.representative)}</span>` : ''}
+                </div>
+              </a>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Internal SILO Mesh: Related Companies in Same Industry -->
+      ${industryList && industryList.length > 0 ? `
+        <div class="related-section">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <h3 class="related-section-title" style="margin-bottom: 0;">
+              <span>🏭 Doanh nghiệp cùng nhóm ngành nghề</span>
+            </h3>
+            <a href="/nganh-nghe/${industrySlug}" class="badge-silo-link" style="font-size: 0.8rem;">Xem tất cả →</a>
+          </div>
+          <div class="related-grid">
+            ${industryList.map(rel => `
+              <a href="/${this.escape(rel.slug)}" class="related-card">
+                <div class="related-card-title">${this.escape(rel.name)}</div>
+                <div class="related-card-sub">
+                  <span>MST: <strong>${this.escape(rel.taxId)}</strong></span>
+                  <span>•</span>
+                  <span>${this.escape(rel.province || '')}</span>
                 </div>
               </a>
             `).join('')}
@@ -988,6 +1148,28 @@ export class SeoRenderer {
 
   ${this.renderCommonFooter()}
 
+  <!-- QR Code Modal Popup -->
+  <div id="qr-modal-backdrop" class="qr-modal-backdrop" onclick="if(event.target === this) closeQrModal()">
+    <div class="qr-modal-card">
+      <button class="qr-modal-close" onclick="closeQrModal()" title="Đóng">✕</button>
+      <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 6px; color: var(--text-main);">Mã QR Doanh Nghiệp</h3>
+      <p style="font-size: 0.84rem; color: var(--text-muted); margin: 0 0 12px;">Quét mã để xem hoặc lưu thông tin doanh nghiệp trên điện thoại</p>
+      
+      <div class="qr-image-container">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pageUrl)}&margin=8" alt="QR Code ${this.escape(d.taxId)}" loading="lazy">
+      </div>
+      
+      <div style="font-size: 0.95rem; font-weight: 700; color: var(--primary); margin-bottom: 14px;">
+        MST: ${this.escape(d.taxId)}
+      </div>
+
+      <div style="display: flex; gap: 8px; justify-content: center;">
+        <button class="btn-tool" onclick="copyShareUrl()">Sao chép link</button>
+        <button class="btn-tool" onclick="closeQrModal()">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const companySummary = ${JSON.stringify(`TÊN CÔNG TY: ${d.name}
 MÃ SỐ THUẾ: ${d.taxId}
@@ -998,6 +1180,10 @@ TÌNH TRẠNG: ${statusText}
 NGÀY HOẠT ĐỘNG: ${d.startDate || 'N/A'}
 QUẢN LÝ BỞI: ${d.managedBy || 'N/A'}
 NGÀNH NGHỀ CHÍNH: ${d.mainIndustry || 'N/A'}`)};
+
+    const invoiceInfo = ${JSON.stringify(`Tên công ty: ${d.name}
+Mã số thuế: ${d.taxId}
+Địa chỉ: ${d.address || d.taxAddress}`)};
 
     function showToast(text) {
       const container = document.getElementById('toast-container');
@@ -1034,9 +1220,25 @@ NGÀNH NGHỀ CHÍNH: ${d.mainIndustry || 'N/A'}`)};
       copyToClipboard(companySummary, 'Đã sao chép tóm tắt công ty');
     }
 
+    function copyInvoiceInfo() {
+      copyToClipboard(invoiceInfo, 'Đã sao chép thông tin xuất hóa đơn VAT!');
+    }
+
     function copyShareUrl() {
       copyToClipboard(window.location.href, 'Đã sao chép liên kết chia sẻ');
     }
+
+    function openQrModal() {
+      document.getElementById('qr-modal-backdrop').classList.add('active');
+    }
+
+    function closeQrModal() {
+      document.getElementById('qr-modal-backdrop').classList.remove('active');
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeQrModal();
+    });
 
     function filterIndustries(input) {
       const term = input.value.toLowerCase().trim();

@@ -88,25 +88,21 @@ export class Database {
   }
 
   extractProvince(address) {
-    if (!address) return 'Khác';
+    if (!address) return 'Toàn Quốc';
     const clean = address.toLowerCase();
     if (clean.includes('hà nội') || clean.includes('ha noi')) return 'Hà Nội';
-    if (clean.includes('hồ chí minh') || clean.includes('tp.hcm') || clean.includes('tp hcm') || clean.includes('sài gòn')) return 'TP Hồ Chí Minh';
+    if (clean.includes('hồ chí minh') || clean.includes('tp.hcm') || clean.includes('tp hcm') || clean.includes('sài gòn') || clean.includes('tphcm')) return 'TP Hồ Chí Minh';
     if (clean.includes('đà nẵng') || clean.includes('da nang')) return 'Đà Nẵng';
     if (clean.includes('hải phòng') || clean.includes('hai phong')) return 'Hải Phòng';
     if (clean.includes('cần thơ') || clean.includes('can tho')) return 'Cần Thơ';
     if (clean.includes('bình dương') || clean.includes('binh duong')) return 'Bình Dương';
     if (clean.includes('đồng nai') || clean.includes('dong nai')) return 'Đồng Nai';
     if (clean.includes('bà rịa') || clean.includes('vũng tàu')) return 'Bà Rịa - Vũng Tàu';
-    if (clean.includes('long an')) return 'Long An';
-    if (clean.includes('quảng ninh')) return 'Quảng Ninh';
-    if (clean.includes('bắc ninh')) return 'Bắc Ninh';
-    if (clean.includes('thái nguyên')) return 'Thái Nguyên';
-    if (clean.includes('thanh hóa') || clean.includes('thanh hoa')) return 'Thanh Hóa';
-    if (clean.includes('nghệ an') || clean.includes('nghe an')) return 'Nghệ An';
-    if (clean.includes('thừa thiên huế') || clean.includes('huế')) return 'Thừa Thiên Huế';
-    if (clean.includes('khánh hòa') || clean.includes('nha trang')) return 'Khánh Hòa';
-    if (clean.includes('lâm đồng') || clean.includes('đà lạt')) return 'Lâm Đồng';
+    
+    // Check against all other 63 provinces
+    for (const p of VIETNAM_PROVINCES) {
+      if (clean.includes(p.name.toLowerCase())) return p.name;
+    }
     return 'Toàn Quốc';
   }
 
@@ -276,6 +272,7 @@ export class Database {
       startDate: finalStartDate,
       managedBy: finalManagedBy,
       address,
+      province,
       mainIndustry,
       industries
     };
@@ -383,6 +380,50 @@ export class Database {
       return res.rows || [];
     } catch (err) {
       console.error('[DB] Lỗi getRelatedCompaniesByRepresentative:', err);
+      return [];
+    }
+  }
+
+  async getRelatedCompaniesByProvince(province, currentTaxId, limit = 6) {
+    if (!province || !this.client || province === 'Toàn Quốc' || province === 'Khác') return [];
+    try {
+      const res = await this.client.execute({
+        sql: `
+          SELECT taxId, name, slug, representative, address, status, province 
+          FROM companies 
+          WHERE province = ? AND taxId != ?
+          ORDER BY updatedAt DESC 
+          LIMIT ?
+        `,
+        args: [province, currentTaxId || '', limit]
+      });
+      return res.rows || [];
+    } catch (err) {
+      console.error('[DB] Lỗi getRelatedCompaniesByProvince:', err);
+      return [];
+    }
+  }
+
+  async getRelatedCompaniesByIndustry(mainIndustry, currentTaxId, limit = 6) {
+    if (!mainIndustry || !this.client) return [];
+    const m = mainIndustry.match(/Mã:\s*(\d{4})/i);
+    const code = m ? m[1] : '';
+    if (!code) return [];
+    try {
+      const pattern = `%${code}%`;
+      const res = await this.client.execute({
+        sql: `
+          SELECT taxId, name, slug, representative, address, status, province 
+          FROM companies 
+          WHERE mainIndustry LIKE ? AND taxId != ?
+          ORDER BY updatedAt DESC 
+          LIMIT ?
+        `,
+        args: [pattern, currentTaxId || '', limit]
+      });
+      return res.rows || [];
+    } catch (err) {
+      console.error('[DB] Lỗi getRelatedCompaniesByIndustry:', err);
       return [];
     }
   }
