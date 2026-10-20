@@ -339,7 +339,7 @@ function renderResults(items, currentPage, maxPage) {
 
     card.innerHTML = `
       <div class="card-header-bar" onclick="toggleCardAccordion(document.getElementById('company-card-${index}'), ${escapeHtml(JSON.stringify(item))})">
-        <div>
+        <div class="card-title-group">
           <h3 class="company-title-link">
             ${escapeHtml(item.name)}
           </h3>
@@ -356,7 +356,7 @@ function renderResults(items, currentPage, maxPage) {
           </div>
         </div>
 
-        <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+        <div class="card-actions-group">
           <button class="btn-card-save" onclick="event.stopPropagation(); toggleBookmarkItem(${escapeHtml(JSON.stringify(item))}, this)">
             ${isSaved ? '★ Đã lưu' : '☆ Lưu'}
           </button>

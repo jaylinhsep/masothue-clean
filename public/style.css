@@ -1254,3 +1254,526 @@ button, input, select {
 .hidden {
   display: none !important;
 }
+
+/* ==========================================================================
+   MOBILE & TABLET RESPONSIVE OVERHAUL (iOS & Android Optimized)
+   ========================================================================== */
+
+/* Touch & Viewport Protection */
+html, body {
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+button, a, input, select {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Base Form Control Safety for iOS Safari (Prevents auto-zoom) */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important; /* iOS Safari requires 16px to not auto-zoom */
+  }
+}
+
+/* Tablet & Mobile (<= 768px) */
+@media (max-width: 768px) {
+  /* Navbar */
+  .nav-container {
+    padding: 10px 14px;
+  }
+  
+  .brand {
+    gap: 8px;
+  }
+  
+  .brand-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+  }
+  
+  .brand-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .brand-title {
+    font-size: 1rem;
+    gap: 6px;
+  }
+  
+  .clean-badge {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+  }
+  
+  .brand-subtitle {
+    display: none !important; /* Hide long subtitle on mobile to keep navbar clean & slim */
+  }
+  
+  .nav-actions {
+    gap: 5px;
+  }
+  
+  .btn-icon {
+    padding: 6px 9px;
+    font-size: 0.8rem;
+  }
+  
+  .btn-icon .btn-label {
+    display: none !important; /* Hide text label on mobile, icons only */
+  }
+
+  /* SSR Header Quick Search Bar */
+  .ssr-header-search {
+    width: 100%;
+    margin-top: 8px;
+  }
+  
+  /* Hero Section */
+  .hero-section {
+    padding: 22px 14px 18px;
+  }
+  
+  .hero-title {
+    font-size: 1.45rem;
+    line-height: 1.3;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+  }
+  
+  .hero-desc {
+    font-size: 0.88rem;
+    line-height: 1.45;
+    margin-bottom: 16px;
+  }
+  
+  /* Search Form Mobile Overhaul (2-Row Touch Layout) */
+  .search-container {
+    padding: 6px;
+    border-radius: var(--radius-md);
+  }
+  
+  .search-form {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+  
+  .search-type-wrapper {
+    width: 100%;
+  }
+  
+  .search-type-select {
+    width: 100%;
+    height: 44px;
+    padding: 10px 12px;
+    font-size: 16px !important;
+    border-radius: var(--radius-md);
+    background-color: var(--bg-app);
+  }
+  
+  .search-input-wrapper {
+    width: 100%;
+    height: 48px;
+    background: var(--bg-app);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+  }
+  
+  .search-input {
+    height: 100%;
+    font-size: 16px !important;
+    padding: 8px 36px 8px 4px;
+  }
+  
+  .btn-clear {
+    right: 8px;
+    font-size: 1.1rem;
+    padding: 6px;
+  }
+  
+  .btn-primary {
+    width: 100%;
+    height: 46px;
+    font-size: 1rem;
+    justify-content: center;
+    border-radius: var(--radius-md);
+  }
+
+  /* Quick Suggestion Chips (Smooth Horizontal Swipe) */
+  .quick-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    justify-content: flex-start;
+    padding: 6px 2px 8px;
+    margin-top: 10px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .quick-chips::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .chip-label {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+  }
+  
+  .chip {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 5px 12px;
+    font-size: 0.78rem;
+  }
+
+  /* Results Section */
+  .results-section {
+    padding: 8px 12px 40px;
+  }
+  
+  .results-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+  }
+  
+  .results-heading {
+    font-size: 1.15rem;
+  }
+  
+  .results-meta {
+    font-size: 0.8rem;
+  }
+  
+  /* Company Cards on Mobile */
+  .company-card {
+    padding: 14px 12px;
+    border-radius: var(--radius-md);
+    gap: 10px;
+  }
+  
+  .card-header-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .card-title-group {
+    width: 100%;
+  }
+
+  .company-title-link {
+    font-size: 1.05rem;
+    line-height: 1.35;
+    word-break: break-word;
+    display: block;
+  }
+  
+  .card-badges {
+    margin-top: 4px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  
+  .card-actions-group {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+    gap: 8px;
+  }
+  
+  .btn-toggle-expand {
+    flex: 1;
+    justify-content: center;
+    padding: 7px 12px;
+    font-size: 0.8rem;
+    height: 38px;
+  }
+  
+  .btn-card-save {
+    padding: 7px 12px;
+    font-size: 0.8rem;
+    height: 38px;
+  }
+  
+  .card-info-rows {
+    font-size: 0.84rem;
+    gap: 6px;
+  }
+  
+  .info-item {
+    gap: 6px;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+  
+  /* Sổ thông tin (Accordion Toolbar Swipe) */
+  .modal-toolbar {
+    padding: 8px 6px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .modal-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .btn-tool {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    height: 34px;
+  }
+  
+  /* MST Card Highlight */
+  .mst-highlight-card {
+    padding: 12px 14px;
+  }
+  
+  .mst-code {
+    font-size: 1.35rem;
+    letter-spacing: 0.5px;
+  }
+  
+  .btn-copy-mst {
+    padding: 5px 10px;
+    font-size: 0.78rem;
+  }
+  
+  .mst-updated {
+    font-size: 0.75rem;
+  }
+
+  /* Detail Grid Cards (Full width on mobile) */
+  .detail-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .detail-card {
+    padding: 12px;
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .detail-card .btn-copy-small {
+    align-self: flex-end;
+    margin-top: 4px;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+  }
+  
+  .card-label {
+    font-size: 0.72rem;
+  }
+  
+  .card-value {
+    font-size: 0.9rem;
+    word-break: break-word;
+    line-height: 1.4;
+  }
+
+  /* Industries Section on Mobile */
+  .industries-section {
+    padding-top: 14px;
+    margin-top: 18px !important;
+  }
+  
+  .industries-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .industries-header h3 {
+    font-size: 0.95rem;
+  }
+  
+  .filter-industries-input {
+    min-width: 100%;
+    width: 100%;
+    font-size: 16px !important;
+    height: 42px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+  }
+  
+  .industries-table-wrapper {
+    max-height: 240px;
+  }
+  
+  .industries-table {
+    font-size: 0.78rem;
+  }
+  
+  .industries-table th,
+  .industries-table td {
+    padding: 8px 6px;
+  }
+  
+  .industries-table th:first-child,
+  .industries-table td:first-child {
+    width: 65px !important;
+    text-align: center;
+  }
+
+  /* Modal Dialog (Native Bottom Sheet Experience on Mobile) */
+  .modal-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+  
+  .modal-dialog {
+    max-height: 92vh;
+    height: 92vh;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    margin: 0;
+    animation: sheetUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  @keyframes sheetUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  
+  .modal-header {
+    padding: 16px 14px 12px;
+    position: relative;
+  }
+  
+  .modal-header::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 38px;
+    height: 4px;
+    background: var(--border);
+    border-radius: var(--radius-full);
+  }
+  
+  .modal-company-name {
+    font-size: 1.15rem;
+    margin-top: 10px;
+    line-height: 1.35;
+  }
+  
+  .modal-body {
+    padding: 14px 12px 30px;
+    gap: 14px;
+  }
+
+  /* Drawers Full Screen on Mobile */
+  .drawer {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Welcome & Features Grid */
+  .welcome-section {
+    padding: 0 14px;
+    margin: 20px auto 40px;
+  }
+  
+  .features-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+  
+  .feature-card {
+    padding: 16px;
+  }
+
+  /* SSR Pages (.ssr-main-container) */
+  .ssr-main-container {
+    padding: 0 10px !important;
+    margin: 12px auto 30px !important;
+  }
+  
+  .ssr-company-title {
+    font-size: 1.25rem !important;
+    line-height: 1.35 !important;
+    margin-top: 4px;
+  }
+  
+  .ssr-breadcrumb {
+    font-size: 0.78rem !important;
+    margin-bottom: 12px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .ssr-search-bar {
+    margin-bottom: 16px;
+  }
+  
+  .ssr-search-form {
+    display: flex;
+    gap: 6px;
+  }
+  
+  .ssr-search-input {
+    flex: 1;
+    height: 42px;
+    font-size: 16px !important;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    color: var(--text-main);
+  }
+  
+  .ssr-search-btn {
+    height: 42px;
+    padding: 0 16px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+
+  /* Pagination */
+  .pagination-container {
+    gap: 4px;
+  }
+  
+  .btn-page {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+  
+  .page-num {
+    min-width: 32px;
+    height: 32px;
+    font-size: 0.8rem;
+  }
+}
+

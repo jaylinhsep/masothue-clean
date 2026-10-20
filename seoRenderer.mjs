@@ -102,7 +102,7 @@ export class SeoRenderer {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=2">
+  <link rel="stylesheet" href="/style.css?v=3">
 </head>
 <body class="light-theme">
   <!-- Toast Container -->
@@ -127,23 +127,37 @@ export class SeoRenderer {
       </a>
 
       <div class="nav-actions">
-        <a href="/" class="btn-icon" style="text-decoration: none;">
+        <a href="/" class="btn-icon" style="text-decoration: none;" title="Tìm kiếm mới">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <span>Tìm kiếm mới</span>
+          <span class="btn-label">Tìm kiếm mới</span>
         </a>
       </div>
     </div>
   </header>
 
-  <main class="main-content" style="max-width: 1000px; margin: 30px auto; padding: 0 20px;">
+  <main class="main-content ssr-main-container">
     <!-- Breadcrumb navigation -->
-    <nav aria-label="Breadcrumb" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">
+    <nav aria-label="Breadcrumb" class="ssr-breadcrumb" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">
       <a href="/" style="color: var(--primary); text-decoration: none;">Trang chủ</a> &rsaquo;
       <span>Tra cứu mã số thuế</span> &rsaquo;
       <span style="color: var(--text-main); font-weight: 600;">${this.escape(d.name)}</span>
     </nav>
+
+    <!-- Quick Search on SSR Page -->
+    <div class="ssr-search-bar" style="margin-bottom: 18px;">
+      <form action="/" method="GET" class="ssr-search-form" onsubmit="const val = document.getElementById('ssr-search-input').value.trim(); if(val) window.location.href='/?q=' + encodeURIComponent(val); return false;">
+        <input 
+          type="text" 
+          id="ssr-search-input" 
+          class="ssr-search-input" 
+          placeholder="🔍 Nhập mã số thuế hoặc tên công ty khác để tra cứu..." 
+          required
+        >
+        <button type="submit" class="ssr-search-btn">Tìm</button>
+      </form>
+    </div>
 
     <!-- Main Company Card Container -->
     <div class="company-card" style="box-shadow: var(--shadow-lg); border-color: var(--border);">
@@ -152,7 +166,7 @@ export class SeoRenderer {
           <span class="status-badge ${statusClass}">${this.escape(statusText)}</span>
           ${d.type ? `<span class="type-badge">${this.escape(d.type)}</span>` : ''}
         </div>
-        <h1 style="font-size: 1.65rem; font-weight: 800; line-height: 1.3; color: var(--text-main);">
+        <h1 class="ssr-company-title" style="font-size: 1.65rem; font-weight: 800; line-height: 1.3; color: var(--text-main);">
           ${this.escape(d.name)}
         </h1>
         ${d.internationalName || d.shortName ? `
