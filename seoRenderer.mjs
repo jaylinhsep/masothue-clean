@@ -107,7 +107,7 @@ export class SeoRenderer {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=4">
+  <link rel="stylesheet" href="/style.css?v=5">
 </head>
 <body class="light-theme">
   <!-- Toast Container -->
@@ -203,15 +203,6 @@ export class SeoRenderer {
           </svg>
           <span>In / Xuất PDF</span>
         </button>
-
-        <a href="https://masothue.com${this.escape(d.url)}" target="_blank" rel="noopener noreferrer" class="btn-tool link-external">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-            <polyline points="15 3 21 3 21 9"/>
-            <line x1="10" y1="14" x2="21" y2="3"/>
-          </svg>
-          <span>Trang gốc</span>
-        </a>
       </div>
 
       <!-- MST Highlight -->
@@ -356,7 +347,7 @@ export class SeoRenderer {
 
   <footer class="footer">
     <div class="footer-container">
-      <p>Tra Cứu Mã Số Thuế Sạch • Dữ liệu công khai từ Cổng thông tin Đăng ký Quốc gia & masothue.com</p>
+      <p>Tra Cứu Mã Số Thuế Sạch • Dữ liệu công khai từ Cổng thông tin Doanh nghiệp & Tổng cục Thuế</p>
       <p class="footer-sub">Hệ thống tối ưu SEO, không quảng cáo, tốc độ tải dưới 0.5s.</p>
     </div>
   </footer>

@@ -221,7 +221,7 @@ function setupEventListeners() {
   });
 
   el.btnCopySummary.addEventListener('click', copySummary);
-  el.btnExportJson.addEventListener('click', exportJson);
+  if (el.btnExportJson) el.btnExportJson.addEventListener('click', exportJson);
   el.btnToggleBookmarkDetail.addEventListener('click', toggleBookmarkActiveDetail);
 
   // Filter industries table
@@ -522,33 +522,14 @@ function renderAccordionContent(data, container, item) {
         <span>Sao chép tóm tắt</span>
       </button>
 
-      <button class="btn-tool" onclick="downloadCompanyJson(${escapeHtml(JSON.stringify(data))})">
+      <button class="btn-tool" onclick="window.print()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
+          <polyline points="6 9 6 2 18 2 18 9"/>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+          <rect width="12" height="8" x="6" y="14"/>
         </svg>
-        <span>Xuất JSON</span>
+        <span>In / Lưu PDF</span>
       </button>
-
-      <button class="btn-tool" onclick="openDetailModal(${escapeHtml(JSON.stringify(data))})">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="15 3 21 3 21 9"/>
-          <polyline points="9 21 3 21 3 15"/>
-          <line x1="21" y1="3" x2="14" y2="10"/>
-          <line x1="3" y1="21" x2="10" y2="14"/>
-        </svg>
-        <span>Xem toàn màn hình</span>
-      </button>
-
-      <a href="https://masothue.com${escapeHtml(data.url)}" target="_blank" rel="noopener noreferrer" class="btn-tool link-external">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-          <polyline points="15 3 21 3 21 9"/>
-          <line x1="10" y1="14" x2="21" y2="3"/>
-        </svg>
-        <span>Trang gốc</span>
-      </a>
     </div>
 
     <!-- Key MST Box -->
@@ -830,9 +811,6 @@ function openDetailModal(data) {
   } else {
     el.industriesSection.classList.add('hidden');
   }
-
-  // Source link
-  el.btnOpenSource.href = `https://masothue.com${data.url}`;
 
   // Bookmark button state
   updateDetailBookmarkButton();
