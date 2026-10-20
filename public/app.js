@@ -485,7 +485,9 @@ async function toggleCardAccordion(cardEl, item, forceExpand = false) {
 
   try {
     let detailData = item.detail || null;
-    if (!detailData) {
+    // If detailData is missing or incomplete (no representative and generic tax office), fetch fresh from /api/detail
+    const isIncomplete = detailData && !detailData.representative && (!detailData.managedBy || detailData.managedBy === 'Cơ quan Thuế');
+    if (!detailData || isIncomplete) {
       const res = await fetch(`/api/detail?path=${encodeURIComponent(item.url)}`);
       const resJson = await res.json();
       if (resJson.success && resJson.data) {

@@ -308,31 +308,69 @@ export class MasothueCrawler {
     // 1. Direct Tax Code check
     const isPureDigits = /^\d{10}(-\d{3})?$/.test(q);
     if (isPureDigits) {
-      // Priority 1: Check Turso Cloud DB first! Instant (<30ms) & has full enriched metadata
+      // Priority 1: Check Turso Cloud DB first!
       const dbCompany = await db.getCompanyByTaxId(q);
       if (dbCompany && dbCompany.data) {
-        const cleanSlug = (dbCompany.slug || '').replace(/^\/?(mst\/)?/, '');
-        const targetUrl = `/${cleanSlug}`;
-        return {
-          success: true,
-          isDirect: true,
-          fromDb: true,
-          directUrl: targetUrl,
-          detail: dbCompany.data,
-          items: [{
-            name: dbCompany.name,
-            url: targetUrl,
-            taxId: dbCompany.taxId,
-            representative: dbCompany.representative || dbCompany.data.representative || '',
-            address: dbCompany.address,
-            status: dbCompany.status,
-            province: dbCompany.province,
-            autoExpand: true
-          }],
-          currentPage: 1,
-          maxPage: 1,
-          totalFound: 1
-        };
+        const hasRep = (dbCompany.representative && dbCompany.representative.trim()) || 
+                       (dbCompany.data.representative && dbCompany.data.representative.trim());
+        const hasManaged = dbCompany.data.managedBy && dbCompany.data.managedBy !== 'Cơ quan Thuế';
+
+        // 1A. If already enriched with representative or specific tax office, return immediately (<30ms)!
+        if (hasRep || hasManaged) {
+          const cleanSlug = (dbCompany.slug || '').replace(/^\/?(mst\/)?/, '');
+          const targetUrl = `/${cleanSlug}`;
+          return {
+            success: true,
+            isDirect: true,
+            fromDb: true,
+            directUrl: targetUrl,
+            detail: dbCompany.data,
+            items: [{
+              name: dbCompany.name,
+              url: targetUrl,
+              taxId: dbCompany.taxId,
+              representative: hasRep || '',
+              address: dbCompany.address,
+              status: dbCompany.status,
+              province: dbCompany.province,
+              autoExpand: true
+            }],
+            currentPage: 1,
+            maxPage: 1,
+            totalFound: 1
+          };
+        }
+
+        // 1B. If in DB but INCOMPLETE (missing rep/managedBy), automatically enrich it right now!
+        const cleanSlug = (dbCompany.slug || `${dbCompany.taxId}-${this.slugify(dbCompany.name)}`).replace(/^\/?(mst\/)?/, '');
+        try {
+          const freshDetail = await this.getDetail(`/${cleanSlug}`, true);
+          if (freshDetail.success && freshDetail.data && (freshDetail.data.representative || freshDetail.data.managedBy)) {
+            await db.saveCompany(freshDetail.data);
+            const targetUrl = `/${cleanSlug}`;
+            return {
+              success: true,
+              isDirect: true,
+              directUrl: targetUrl,
+              detail: freshDetail.data,
+              items: [{
+                name: freshDetail.data.name,
+                url: targetUrl,
+                taxId: freshDetail.data.taxId,
+                representative: freshDetail.data.representative || '',
+                address: freshDetail.data.address,
+                status: freshDetail.data.status || 'Đang hoạt động',
+                province: db.extractProvince(freshDetail.data.address),
+                autoExpand: true
+              }],
+              currentPage: 1,
+              maxPage: 1,
+              totalFound: 1
+            };
+          }
+        } catch (e) {
+          console.warn('[Auto-Enrich Incomplete DB Company Error]', e.message);
+        }
       }
 
       // Priority 2: If not in DB, fetch from VietQR and automatically enrich full details!
