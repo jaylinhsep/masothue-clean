@@ -249,6 +249,7 @@ app.get('/api/debug-crawler', async (req, res) => {
 // API: Debug Serper Google API directly
 app.get('/api/debug-serper', async (req, res) => {
   const q = req.query.q || '0318052916';
+  const rawQuery = req.query.raw ? q : (req.query.mode === 'all' ? q : `site:masothue.com ${q.trim()}`);
   const serperKey = (process.env.SERPER_API_KEY || process.env.SERPER_KEY || '').trim();
   if (!serperKey) {
     return res.json({ success: false, message: 'SERPER_API_KEY is not set in process.env!' });
@@ -262,7 +263,7 @@ app.get('/api/debug-serper', async (req, res) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        q: `site:masothue.com ${q.trim()}`,
+        q: rawQuery,
         gl: 'vn',
         hl: 'vi',
         num: 5
@@ -273,9 +274,8 @@ app.get('/api/debug-serper', async (req, res) => {
     res.json({
       success: apiRes.ok,
       httpStatus: apiRes.status,
-      creditsUsed: apiRes.headers.get('x-credits-used'),
-      organic: data.organic || [],
-      creditsNotice: 'Credits remaining on dashboard: ~' + (2500 - (data.credits || 0))
+      queryUsed: rawQuery,
+      organic: data.organic || []
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
