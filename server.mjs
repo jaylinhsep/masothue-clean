@@ -212,6 +212,10 @@ app.get('/api/debug-crawler', async (req, res) => {
     const apiKey = (process.env.GOOGLE_SEARCH_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_KEY || '').trim();
     const cx = (process.env.GOOGLE_SEARCH_CX || process.env.GOOGLE_CX || process.env.SEARCH_ENGINE_ID || process.env.GOOGLE_SEARCH_ENGINE_ID || '').trim();
 
+    const serperKey = (process.env.SERPER_API_KEY || process.env.SERPER_KEY || '').trim();
+    diag.hasSerperKey = Boolean(serperKey);
+    diag.serperKeyPrefix = serperKey ? serperKey.slice(0, 6) + '...' : null;
+
     diag.hasGoogleKey = Boolean(apiKey);
     diag.hasGoogleCx = Boolean(cx);
     diag.keyPrefix = apiKey ? apiKey.slice(0, 6) + '...' : null;
@@ -239,6 +243,42 @@ app.get('/api/debug-crawler', async (req, res) => {
     res.json(diag);
   } catch (err) {
     res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
+// API: Debug Serper Google API directly
+app.get('/api/debug-serper', async (req, res) => {
+  const q = req.query.q || '0318052916';
+  const serperKey = (process.env.SERPER_API_KEY || process.env.SERPER_KEY || '').trim();
+  if (!serperKey) {
+    return res.json({ success: false, message: 'SERPER_API_KEY is not set in process.env!' });
+  }
+
+  try {
+    const apiRes = await fetch('https://google.serper.dev/search', {
+      method: 'POST',
+      headers: {
+        'X-API-KEY': serperKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        q: `site:masothue.com ${q.trim()}`,
+        gl: 'vn',
+        hl: 'vi',
+        num: 5
+      })
+    });
+
+    const data = await apiRes.json();
+    res.json({
+      success: apiRes.ok,
+      httpStatus: apiRes.status,
+      creditsUsed: apiRes.headers.get('x-credits-used'),
+      organic: data.organic || [],
+      creditsNotice: 'Credits remaining on dashboard: ~' + (2500 - (data.credits || 0))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
