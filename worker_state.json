@@ -1,14 +1,14 @@
 {
   "lastDate": "2026-10-20",
-  "serperUsedToday": 76,
+  "serperUsedToday": 1414,
   "maxSerperPerDay": 2400,
-  "totalSaved": 76,
+  "totalSaved": 1414,
   "activeRangeIndex": 0,
   "ranges": [
     {
       "id": "tphcm-2024-2026",
       "name": "TP. Hồ Chí Minh (Dải mới 2024-2026)",
-      "current": 31805382,
+      "current": 31806860,
       "end": 31850000,
       "province": "TP Hồ Chí Minh"
     },

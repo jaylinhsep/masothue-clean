@@ -442,6 +442,11 @@ button, input, select {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .company-card:hover {
@@ -950,8 +955,10 @@ body.dark-theme .status-warning {
 /* Detail Grid */
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 640px) {
@@ -969,6 +976,8 @@ body.dark-theme .status-warning {
   gap: 12px;
   align-items: flex-start;
   position: relative;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .detail-card.full-width {
@@ -983,6 +992,7 @@ body.dark-theme .status-warning {
 
 .card-content {
   flex: 1;
+  min-width: 0;
 }
 
 .card-label {
@@ -999,6 +1009,7 @@ body.dark-theme .status-warning {
   font-weight: 500;
   color: var(--text-main);
   line-height: 1.4;
+  word-break: break-word;
 }
 
 .font-highlight {
@@ -2250,20 +2261,26 @@ button, a, input, select {
 /* Hub Company Listing Grid */
 .hub-companies-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .hub-company-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 18px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   box-shadow: var(--shadow-sm);
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .hub-company-card:hover {
@@ -2276,19 +2293,27 @@ button, a, input, select {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   margin-bottom: 10px;
+  min-width: 0;
 }
 
 .hub-company-name {
   font-size: 1.05rem;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.4;
   margin-bottom: 12px;
+  min-width: 0;
+  word-break: break-word;
 }
 
 .hub-company-name a {
   color: var(--text-main);
   text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   transition: color 0.12s ease;
 }
 
@@ -2303,17 +2328,24 @@ button, a, input, select {
   font-size: 0.85rem;
   border-top: 1px solid var(--border);
   padding-top: 10px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .meta-row {
   display: flex;
   gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+  width: 100%;
 }
 
 .meta-label {
   color: var(--text-muted);
   font-weight: 500;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .meta-val {
@@ -2321,6 +2353,8 @@ button, a, input, select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }
 
 /* Industry Cards Grid */
@@ -2507,20 +2541,54 @@ button, a, input, select {
     font-size: 0.78rem;
     padding: 4px 8px;
   }
+  .hub-hero {
+    padding: 22px 16px 20px;
+    margin-bottom: 20px;
+  }
   .hub-title {
-    font-size: 1.45rem;
+    font-size: 1.4rem;
+    line-height: 1.3;
+  }
+  .hub-desc {
+    font-size: 0.88rem;
+    margin-bottom: 14px;
   }
   .hub-companies-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .hub-company-card {
+    padding: 14px;
+    gap: 8px;
+  }
+  .hub-company-name {
+    font-size: 0.98rem;
+    margin-bottom: 8px;
+  }
+  .hub-company-meta {
+    font-size: 0.82rem;
+    padding-top: 8px;
+    gap: 5px;
   }
   .province-cards-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
   .industry-cards-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .province-all-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .province-item-link {
+    padding: 8px 10px;
+    font-size: 0.84rem;
   }
   .footer-links-grid {
     grid-template-columns: 1fr;
+    gap: 20px;
   }
 }
 
@@ -2626,6 +2694,9 @@ button, a, input, select {
   margin-top: 28px;
   border-top: 1px solid var(--border);
   padding-top: 20px;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .related-section-title {
@@ -2636,21 +2707,30 @@ button, a, input, select {
   display: flex;
   align-items: center;
   gap: 8px;
+  word-break: break-word;
 }
 
 .related-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .related-card {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   text-decoration: none;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
   transition: all 0.15s ease;
 }
 
@@ -2664,18 +2744,29 @@ button, a, input, select {
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--text-main);
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 4px;
+  line-height: 1.35;
+  margin-bottom: 6px;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .related-card-sub {
   font-size: 0.78rem;
   color: var(--text-muted);
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.related-card-sub span {
+  min-width: 0;
 }
 
 /* QR Code Modal Popup */
@@ -2756,6 +2847,67 @@ button, a, input, select {
 @media (max-width: 768px) {
   .related-grid {
     grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .related-card {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ssr-main-container {
+    padding: 0 10px !important;
+    margin: 10px auto 30px !important;
+  }
+  .hub-hero {
+    padding: 16px 12px 14px;
+    border-radius: var(--radius-md);
+    margin-bottom: 14px;
+  }
+  .hub-title {
+    font-size: 1.25rem;
+  }
+  .hub-desc {
+    font-size: 0.82rem;
+    margin-bottom: 10px;
+  }
+  .hub-company-card {
+    padding: 12px;
+  }
+  .hub-company-name {
+    font-size: 0.94rem;
+    line-height: 1.35;
+  }
+  .badge-mst {
+    font-size: 0.76rem;
+    padding: 2px 6px;
+  }
+  .meta-label {
+    font-size: 0.78rem;
+  }
+  .meta-val {
+    font-size: 0.8rem;
+  }
+  .related-section {
+    margin-top: 20px;
+    padding-top: 16px;
+  }
+  .related-section-title {
+    font-size: 0.96rem;
+  }
+  .related-card-title {
+    font-size: 0.85rem;
+  }
+  .related-card-sub {
+    font-size: 0.75rem;
+    gap: 4px;
+  }
+  .qr-modal-card {
+    padding: 20px 16px;
+  }
+  .qr-image-container img {
+    width: 150px;
+    height: 150px;
   }
 }
 
