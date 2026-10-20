@@ -238,7 +238,23 @@ export class MasothueCrawler {
       });
 
       if (!res.ok) return null;
-      const data = await res.json();
+      let data = await res.json();
+      if (!data.organic || data.organic.length === 0) {
+        // Fallback: try searching just the tax ID without quotes to match more snippet variations
+        try {
+          const fbRes = await fetch('https://google.serper.dev/search', {
+            method: 'POST',
+            headers: { 'X-API-KEY': serperKey.trim(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ q: taxId, gl: 'vn', hl: 'vi', num: 5 })
+          });
+          if (fbRes.ok) {
+            const fbData = await fbRes.json();
+            if (fbData.organic && fbData.organic.length > 0) {
+              data = fbData;
+            }
+          }
+        } catch (e) {}
+      }
       if (!data.organic || data.organic.length === 0) return null;
 
       let representative = '';
@@ -322,7 +338,23 @@ export class MasothueCrawler {
       });
 
       if (!res.ok) return null;
-      const data = await res.json();
+      let data = await res.json();
+      if (!data.organic || data.organic.length === 0) {
+        // Fallback: try searching just the tax ID without quotes to match more snippet variations
+        try {
+          const fbRes = await fetch('https://google.serper.dev/search', {
+            method: 'POST',
+            headers: { 'X-API-KEY': serperKey.trim(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ q: taxId, gl: 'vn', hl: 'vi', num: 5 })
+          });
+          if (fbRes.ok) {
+            const fbData = await fbRes.json();
+            if (fbData.organic && fbData.organic.length > 0) {
+              data = fbData;
+            }
+          }
+        } catch (e) {}
+      }
       if (!data.organic || data.organic.length === 0) return null;
 
       const items = [];

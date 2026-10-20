@@ -4,6 +4,9 @@ import { fileURLToPath } from 'url';
 import { db } from './database.mjs';
 import { MasothueCrawler } from './crawler.mjs';
 
+// Disable IndexNow during mass seeding to avoid cluttering console
+process.env.INDEXNOW_ENABLED = 'false';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -127,6 +130,17 @@ async function runWorker() {
   const crawler = new MasothueCrawler();
   let state = loadState();
 
+  const serperKey = (process.env.SERPER_API_KEY || process.env.SERPER_KEY || '').trim();
+  if (!serperKey) {
+    console.log(`⚠️  [CHÚ Ý QUAN TRỌNG VỀ SERPER]`);
+    console.log(`    Chưa tìm thấy SERPER_API_KEY trong file .env trên máy tính của bạn.`);
+    console.log(`    Worker sẽ tạm thời nạp Tên + Địa chỉ từ VietQR (Miễn phí 100%).`);
+    console.log(`    -> Để lấy cả Người đại diện & Chi cục thuế, bạn hãy mở file .env và thêm dòng:`);
+    console.log(`       SERPER_API_KEY=key_của_bạn\n`);
+  } else {
+    console.log(`🔑 [SERPER KEY] Đã nhận diện Serper Key: ${serperKey.slice(0, 8)}... (Khóa an toàn: ${MAX_SERPER_PER_DAY}/ngày)\n`);
+  }
+
   console.log(`[TRẠNG THÁI] Ngày: ${state.lastDate}`);
   console.log(`[TRẠNG THÁI] Đã dùng Serper hôm nay: ${state.serperUsedToday} / ${MAX_SERPER_PER_DAY}`);
   console.log(`[TRẠNG THÁI] Tổng công ty nạp thành công: ${state.totalSaved}\n`);
@@ -203,8 +217,8 @@ async function runWorker() {
 
     let finalCompany = { ...vCompany };
 
-    // TẦNG 2: Làm giàu qua Serper (nếu còn trong hạn ngạch < 2400/ngày)
-    if (state.serperUsedToday < MAX_SERPER_PER_DAY) {
+    // TẦNG 2: Làm giàu qua Serper (nếu có key và còn trong hạn ngạch < 2400/ngày)
+    if (serperKey && state.serperUsedToday < MAX_SERPER_PER_DAY) {
       try {
         console.log(`   🔍 Đang lấy Người đại diện & Chi cục thuế qua Serper (Lượt ${state.serperUsedToday + 1}/${MAX_SERPER_PER_DAY})...`);
         const serperInfo = await crawler.enrichViaSerper(taxId, vCompany.name);
