@@ -269,6 +269,39 @@ app.get('/api/debug-crawl', async (req, res) => {
   }
 });
 
+// API: Test Cloud Connectivity to alternative sources
+app.get('/api/test-sources', async (req, res) => {
+  const taxId = req.query.taxId || '0108269207';
+  const targets = [
+    { name: 'vietqr', url: `https://api.vietqr.io/v2/business/${taxId}` },
+    { name: 'masothue_direct', url: `https://masothue.com/${taxId}` },
+    { name: 'trangvang', url: `https://trangvangvietnam.com/tag.asp?key=${taxId}` },
+    { name: 'thuvienphapluat', url: `https://thuvienphapluat.vn/doanh-nghiep/tim-kiem?q=${taxId}` },
+    { name: 'duckduckgo', url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent('site:masothue.com "' + taxId + '"')}` }
+  ];
+
+  const results = [];
+  for (const t of targets) {
+    try {
+      const r = await gotScraping({
+        url: t.url,
+        headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        timeout: { request: 5000 }
+      });
+      results.push({
+        name: t.name,
+        status: r.statusCode,
+        length: r.body.length,
+        title: r.body.match(/<title>(.*?)<\/title>/i)?.[1] || null,
+        hasRep: r.body.includes('Người đại diện') || r.body.includes('Đại diện pháp luật') || r.body.includes('Đại diện')
+      });
+    } catch (e) {
+      results.push({ name: t.name, error: e.message, status: e.response?.statusCode });
+    }
+  }
+  res.json({ success: true, results });
+});
+
 // API: Recent Companies (For Homepage Freshness)
 app.get('/api/recent', async (req, res) => {
   const recent = await db.getRecentCompanies(15);
