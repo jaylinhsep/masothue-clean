@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { gotScraping } from 'got-scraping';
 import { MasothueCrawler } from './crawler.mjs';
 import { db } from './database.mjs';
 import { seoRenderer } from './seoRenderer.mjs';
@@ -238,6 +239,33 @@ app.get('/api/debug-crawler', async (req, res) => {
     res.json(diag);
   } catch (err) {
     res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
+// API: Debug Masothue Crawler connectivity on Cloud
+app.get('/api/debug-crawl', async (req, res) => {
+  const testPath = req.query.path || '/0108269207-cong-ty-co-phan-be-group';
+  const url = 'https://masothue.com' + (testPath.startsWith('/') ? testPath : '/' + testPath);
+  try {
+    const r = await gotScraping({
+      url,
+      headers: { 'referer': 'https://masothue.com/' }
+    });
+    res.json({
+      success: true,
+      statusCode: r.statusCode,
+      bodyLength: r.body.length,
+      title: r.body.match(/<title>(.*?)<\/title>/i)?.[1] || null,
+      hasRepresentative: r.body.includes('Người đại diện') || r.body.includes('Đại diện pháp luật'),
+      snippet: r.body.slice(0, 400)
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      statusCode: err.response?.statusCode,
+      body: err.response?.body ? err.response.body.slice(0, 500) : null
+    });
   }
 });
 
