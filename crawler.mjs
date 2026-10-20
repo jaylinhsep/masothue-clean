@@ -335,23 +335,45 @@ export class MasothueCrawler {
         };
       }
 
-      // Priority 2: If not in DB, try VietQR API
+      // Priority 2: If not in DB, fetch from VietQR and automatically enrich full details!
       const vCompany = await this.getFromVietQR(q);
       if (vCompany) {
-        await db.saveCompany(vCompany);
-        const cleanSlug = (vCompany.url || '').replace(/^\/?(mst\/)?/, '');
+        // Automatically enrich via slug to get representative, phone, startDate, tax office, industries
+        const slug = `${vCompany.taxId}-${this.slugify(vCompany.name)}`;
+        let enrichedData = { ...vCompany };
+        try {
+          const detail = await this.getDetail(`/${slug}`, true);
+          if (detail.success && detail.data) {
+            enrichedData = {
+              ...vCompany,
+              ...detail.data,
+              representative: detail.data.representative || vCompany.representative || '',
+              phone: detail.data.phone || vCompany.phone || '',
+              startDate: detail.data.startDate || vCompany.startDate || '',
+              managedBy: (detail.data.managedBy && detail.data.managedBy !== 'Cơ quan Thuế') ? detail.data.managedBy : (vCompany.managedBy || 'Cơ quan Thuế'),
+              industries: Array.isArray(detail.data.industries) && detail.data.industries.length > 0 ? detail.data.industries : vCompany.industries
+            };
+          }
+        } catch (e) {
+          console.warn('[Search Auto-Enrich Error]', e.message);
+        }
+
+        await db.saveCompany(enrichedData);
+        const cleanSlug = slug.replace(/^\/?(mst\/)?/, '');
         const targetUrl = `/${cleanSlug}`;
         return {
           success: true,
           isDirect: true,
           directUrl: targetUrl,
-          detail: vCompany,
+          detail: enrichedData,
           items: [{
-            name: vCompany.name,
+            name: enrichedData.name,
             url: targetUrl,
-            taxId: vCompany.taxId,
-            representative: vCompany.representative,
-            address: vCompany.address,
+            taxId: enrichedData.taxId,
+            representative: enrichedData.representative || '',
+            address: enrichedData.address,
+            status: enrichedData.status || 'Đang hoạt động',
+            province: db.extractProvince(enrichedData.address),
             autoExpand: true
           }],
           currentPage: 1,

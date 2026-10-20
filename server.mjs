@@ -85,11 +85,20 @@ async function handleCompanyPage(req, res, slug) {
           company = await db.getCompanyByTaxId(cleanSlug);
         }
       } else {
-        const dRes = await crawler.getDetail('/' + cleanSlug);
+        const dRes = await crawler.getDetail('/' + cleanSlug, true);
         if (dRes.success && dRes.data) {
           await db.saveCompany(dRes.data);
           company = (await db.getCompanyBySlug(cleanSlug)) || (await db.getCompanyByTaxId(dRes.data.taxId));
         }
+      }
+    }
+
+    // 2b. If in DB but missing representative or specific tax office, auto-enrich on the fly!
+    if (company && company.data && (!company.representative || !company.data.representative || !company.data.managedBy || company.data.managedBy === 'Cơ quan Thuế')) {
+      const dRes = await crawler.getDetail('/' + (company.slug || cleanSlug), true);
+      if (dRes.success && dRes.data && (dRes.data.representative || dRes.data.managedBy)) {
+        await db.saveCompany(dRes.data);
+        company = (await db.getCompanyBySlug(cleanSlug)) || (await db.getCompanyByTaxId(company.taxId));
       }
     }
 
@@ -166,17 +175,28 @@ app.get('/api/detail', async (req, res) => {
   }
 
   try {
-    // Check DB first
+    // 1. Check DB first
     const fromDb = (await db.getCompanyBySlug(companyPath)) || (await db.getCompanyByTaxId(companyPath));
+    if (fromDb && fromDb.data) {
+      // If it already has rich data, serve instantly!
+      if (fromDb.representative || fromDb.data.representative || fromDb.data.phone || (fromDb.data.managedBy && fromDb.data.managedBy !== 'Cơ quan Thuế')) {
+        return res.json({ success: true, data: fromDb.data, fromDb: true });
+      }
+    }
+
+    // 2. Not in DB or incomplete in DB -> Crawl on demand with forceFresh = true
+    const cleanPath = companyPath.replace(/^\/?(mst\/)?/, '');
+    const result = await crawler.getDetail('/' + cleanPath, true);
+    if (result.success && result.data) {
+      await db.saveCompany(result.data);
+      return res.json(result);
+    }
+
+    // Fallback to whatever was in DB if crawling fails
     if (fromDb && fromDb.data) {
       return res.json({ success: true, data: fromDb.data, fromDb: true });
     }
 
-    // Not in DB -> Crawl & Save
-    const result = await crawler.getDetail(companyPath);
-    if (result.success && result.data) {
-      await db.saveCompany(result.data);
-    }
     res.json(result);
   } catch (err) {
     console.error('Detail error:', err);
