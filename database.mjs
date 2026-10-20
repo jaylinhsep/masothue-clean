@@ -80,6 +80,7 @@ export class Database {
     await this.client.execute(`CREATE INDEX IF NOT EXISTS idx_companies_name ON companies(name);`);
     await this.client.execute(`CREATE INDEX IF NOT EXISTS idx_companies_rep ON companies(representative);`);
     await this.client.execute(`CREATE INDEX IF NOT EXISTS idx_companies_province ON companies(province);`);
+    await this.client.execute(`CREATE INDEX IF NOT EXISTS idx_companies_industry ON companies(mainIndustry);`);
     await this.client.execute(`CREATE INDEX IF NOT EXISTS idx_companies_updated ON companies(updatedAt DESC);`);
 
     console.log(`[DB] Khởi tạo cơ sở dữ liệu thành công (${this.isTurso ? 'Turso Cloud 5GB' : 'Local SQLite'})`);
@@ -467,6 +468,125 @@ export class Database {
     }
   }
 
+  async getProvinceStats() {
+    if (!this.client) return [];
+    try {
+      const res = await this.client.execute(`
+        SELECT province, COUNT(*) as count 
+        FROM companies 
+        WHERE province IS NOT NULL AND province != '' AND province != 'Toàn Quốc'
+        GROUP BY province 
+        ORDER BY count DESC
+      `);
+      return res.rows || [];
+    } catch (err) {
+      console.error('[DB] Lỗi getProvinceStats:', err);
+      return [];
+    }
+  }
+
+  async getCompaniesByProvincePaginated(province, page = 1, limit = 24) {
+    if (!this.client) return { items: [], total: 0, maxPage: 1, currentPage: 1 };
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const offset = (p - 1) * limit;
+    try {
+      const countRes = await this.client.execute({
+        sql: 'SELECT COUNT(*) as total FROM companies WHERE province = ?',
+        args: [province]
+      });
+      const total = Number(countRes.rows[0]?.total || 0);
+      const maxPage = Math.max(1, Math.ceil(total / limit));
+
+      const res = await this.client.execute({
+        sql: `
+          SELECT taxId, name, slug, representative, address, status, province, updatedAt, mainIndustry 
+          FROM companies 
+          WHERE province = ? 
+          ORDER BY updatedAt DESC 
+          LIMIT ? OFFSET ?
+        `,
+        args: [province, limit, offset]
+      });
+      return { items: res.rows || [], total, maxPage, currentPage: p };
+    } catch (err) {
+      console.error('[DB] Lỗi getCompaniesByProvincePaginated:', err);
+      return { items: [], total: 0, maxPage: 1, currentPage: 1 };
+    }
+  }
+
+  async getTopIndustriesWithCounts() {
+    if (!this.client) return [];
+    try {
+      const res = await this.client.execute(`
+        SELECT mainIndustry, COUNT(*) as count 
+        FROM companies 
+        WHERE mainIndustry IS NOT NULL AND mainIndustry != ''
+        GROUP BY mainIndustry 
+        ORDER BY count DESC 
+        LIMIT 30
+      `);
+      return res.rows || [];
+    } catch (err) {
+      console.error('[DB] Lỗi getTopIndustriesWithCounts:', err);
+      return [];
+    }
+  }
+
+  async getCompaniesByIndustryPaginated(codeOrKeyword, page = 1, limit = 24) {
+    if (!this.client) return { items: [], total: 0, maxPage: 1, currentPage: 1 };
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const offset = (p - 1) * limit;
+    const pattern = `%${codeOrKeyword}%`;
+    try {
+      const countRes = await this.client.execute({
+        sql: 'SELECT COUNT(*) as total FROM companies WHERE mainIndustry LIKE ? OR data LIKE ?',
+        args: [pattern, pattern]
+      });
+      const total = Number(countRes.rows[0]?.total || 0);
+      const maxPage = Math.max(1, Math.ceil(total / limit));
+
+      const res = await this.client.execute({
+        sql: `
+          SELECT taxId, name, slug, representative, address, status, province, updatedAt, mainIndustry 
+          FROM companies 
+          WHERE mainIndustry LIKE ? OR data LIKE ?
+          ORDER BY updatedAt DESC 
+          LIMIT ? OFFSET ?
+        `,
+        args: [pattern, pattern, limit, offset]
+      });
+      return { items: res.rows || [], total, maxPage, currentPage: p };
+    } catch (err) {
+      console.error('[DB] Lỗi getCompaniesByIndustryPaginated:', err);
+      return { items: [], total: 0, maxPage: 1, currentPage: 1 };
+    }
+  }
+
+  async getRecentCompaniesPaginated(page = 1, limit = 24) {
+    if (!this.client) return { items: [], total: 0, maxPage: 1, currentPage: 1 };
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const offset = (p - 1) * limit;
+    try {
+      const countRes = await this.client.execute('SELECT COUNT(*) as total FROM companies');
+      const total = Number(countRes.rows[0]?.total || 0);
+      const maxPage = Math.max(1, Math.ceil(total / limit));
+
+      const res = await this.client.execute({
+        sql: `
+          SELECT taxId, name, slug, representative, address, status, province, updatedAt, mainIndustry 
+          FROM companies 
+          ORDER BY updatedAt DESC 
+          LIMIT ? OFFSET ?
+        `,
+        args: [limit, offset]
+      });
+      return { items: res.rows || [], total, maxPage, currentPage: p };
+    } catch (err) {
+      console.error('[DB] Lỗi getRecentCompaniesPaginated:', err);
+      return { items: [], total: 0, maxPage: 1, currentPage: 1 };
+    }
+  }
+
   async getStats() {
     try {
       const res = await this.client.execute('SELECT COUNT(*) as total FROM companies');
@@ -477,5 +597,93 @@ export class Database {
     }
   }
 }
+
+export const VIETNAM_PROVINCES = [
+  { name: 'TP Hồ Chí Minh', slug: 'tp-ho-chi-minh', region: 'Miền Nam', isHot: true },
+  { name: 'Hà Nội', slug: 'ha-noi', region: 'Miền Bắc', isHot: true },
+  { name: 'Đà Nẵng', slug: 'da-nang', region: 'Miền Trung', isHot: true },
+  { name: 'Bình Dương', slug: 'binh-duong', region: 'Miền Nam', isHot: true },
+  { name: 'Đồng Nai', slug: 'dong-nai', region: 'Miền Nam', isHot: true },
+  { name: 'Hải Phòng', slug: 'hai-phong', region: 'Miền Bắc', isHot: true },
+  { name: 'Cần Thơ', slug: 'can-tho', region: 'Miền Tây', isHot: true },
+  { name: 'Bà Rịa - Vũng Tàu', slug: 'ba-ria-vung-tau', region: 'Miền Nam', isHot: true },
+  { name: 'Long An', slug: 'long-an', region: 'Miền Tây' },
+  { name: 'Bắc Ninh', slug: 'bac-ninh', region: 'Miền Bắc' },
+  { name: 'Quảng Ninh', slug: 'quang-ninh', region: 'Miền Bắc' },
+  { name: 'Khánh Hòa', slug: 'khanh-hoa', region: 'Miền Trung' },
+  { name: 'Thanh Hóa', slug: 'thanh-hoa', region: 'Miền Trung' },
+  { name: 'Nghệ An', slug: 'nghe-an', region: 'Miền Trung' },
+  { name: 'Thừa Thiên Huế', slug: 'thua-thien-hue', region: 'Miền Trung' },
+  { name: 'Lâm Đồng', slug: 'lam-dong', region: 'Tây Nguyên' },
+  { name: 'Thái Nguyên', slug: 'thai-nguyen', region: 'Miền Bắc' },
+  { name: 'Vĩnh Phúc', slug: 'vinh-phuc', region: 'Miền Bắc' },
+  { name: 'Hải Dương', slug: 'hai-duong', region: 'Miền Bắc' },
+  { name: 'Hưng Yên', slug: 'hung-yen', region: 'Miền Bắc' },
+  { name: 'Bình Định', slug: 'binh-dinh', region: 'Miền Trung' },
+  { name: 'Quảng Nam', slug: 'quang-nam', region: 'Miền Trung' },
+  { name: 'Quảng Ngãi', slug: 'quang-ngai', region: 'Miền Trung' },
+  { name: 'Kiên Giang', slug: 'kien-giang', region: 'Miền Tây' },
+  { name: 'Tiền Giang', slug: 'tien-giang', region: 'Miền Tây' },
+  { name: 'Bến Tre', slug: 'ben-tre', region: 'Miền Tây' },
+  { name: 'Tây Ninh', slug: 'tay-ninh', region: 'Miền Nam' },
+  { name: 'Bình Phước', slug: 'binh-phuoc', region: 'Miền Nam' },
+  { name: 'Đắk Lắk', slug: 'dak-lak', region: 'Tây Nguyên' },
+  { name: 'Gia Lai', slug: 'gia-lai', region: 'Tây Nguyên' },
+  { name: 'An Giang', slug: 'an-giang', region: 'Miền Tây' },
+  { name: 'Đồng Tháp', slug: 'dong-thap', region: 'Miền Tây' },
+  { name: 'Vĩnh Long', slug: 'vinh-long', region: 'Miền Tây' },
+  { name: 'Bạc Liêu', slug: 'bac-lieu', region: 'Miền Tây' },
+  { name: 'Cà Mau', slug: 'ca-mau', region: 'Miền Tây' },
+  { name: 'Sóc Trăng', slug: 'soc-trang', region: 'Miền Tây' },
+  { name: 'Trà Vinh', slug: 'tra-vinh', region: 'Miền Tây' },
+  { name: 'Hậu Giang', slug: 'hau-giang', region: 'Miền Tây' },
+  { name: 'Ninh Thuận', slug: 'ninh-thuan', region: 'Miền Trung' },
+  { name: 'Bình Thuận', slug: 'binh-thuan', region: 'Miền Trung' },
+  { name: 'Phú Yên', slug: 'phu-yen', region: 'Miền Trung' },
+  { name: 'Quảng Bình', slug: 'quang-binh', region: 'Miền Trung' },
+  { name: 'Quảng Trị', slug: 'quang-tri', region: 'Miền Trung' },
+  { name: 'Hà Tĩnh', slug: 'ha-tinh', region: 'Miền Trung' },
+  { name: 'Nam Định', slug: 'nam-dinh', region: 'Miền Bắc' },
+  { name: 'Thái Bình', slug: 'thai-binh', region: 'Miền Bắc' },
+  { name: 'Ninh Bình', slug: 'ninh-binh', region: 'Miền Bắc' },
+  { name: 'Hà Nam', slug: 'ha-nam', region: 'Miền Bắc' },
+  { name: 'Bắc Giang', slug: 'bac-giang', region: 'Miền Bắc' },
+  { name: 'Phú Thọ', slug: 'phu-tho', region: 'Miền Bắc' },
+  { name: 'Hòa Bình', slug: 'hoa-binh', region: 'Miền Bắc' },
+  { name: 'Sơn La', slug: 'son-la', region: 'Miền Bắc' },
+  { name: 'Lai Châu', slug: 'lai-chau', region: 'Miền Bắc' },
+  { name: 'Điện Biên', slug: 'dien-bien', region: 'Miền Bắc' },
+  { name: 'Lào Cai', slug: 'lao-cai', region: 'Miền Bắc' },
+  { name: 'Yên Bái', slug: 'yen-bai', region: 'Miền Bắc' },
+  { name: 'Tuyên Quang', slug: 'tuyen-quang', region: 'Miền Bắc' },
+  { name: 'Hà Giang', slug: 'ha-giang', region: 'Miền Bắc' },
+  { name: 'Cao Bằng', slug: 'cao-bang', region: 'Miền Bắc' },
+  { name: 'Bắc Kạn', slug: 'bac-kan', region: 'Miền Bắc' },
+  { name: 'Lạng Sơn', slug: 'lang-son', region: 'Miền Bắc' },
+  { name: 'Kon Tum', slug: 'kon-tum', region: 'Tây Nguyên' },
+  { name: 'Đắk Nông', slug: 'dak-nong', region: 'Tây Nguyên' }
+];
+
+export const TOP_INDUSTRIES = [
+  { code: '4690', name: 'Bán buôn tổng hợp & Dịch vụ thương mại', slug: '4690-ban-buon-tong-hop', icon: '🛒' },
+  { code: '4100', name: 'Xây dựng nhà & Công trình kỹ thuật', slug: '4100-xay-dung-nha', icon: '🏗️' },
+  { code: '6810', name: 'Kinh doanh bất động sản & Nhà đất', slug: '6810-bat-dong-san', icon: '🏢' },
+  { code: '6201', name: 'Lập trình máy vi tính & CNTT', slug: '6201-lap-trinh-may-vi-tinh', icon: '💻' },
+  { code: '4933', name: 'Vận tải hàng hóa & Logistics', slug: '4933-van-tai-logistics', icon: '🚛' },
+  { code: '4646', name: 'Dược phẩm & Thiết bị y tế', slug: '4646-duoc-pham-y-te', icon: '💊' },
+  { code: '1079', name: 'Sản xuất và chế biến thực phẩm', slug: '1079-thuc-pham-do-uong', icon: '🍞' },
+  { code: '1020', name: 'Chế biến & Nuôi trồng thủy sản', slug: '1020-thuy-hai-san', icon: '🐟' },
+  { code: '6619', name: 'Tư vấn đầu tư & Dịch vụ tài chính', slug: '6619-tu-van-dau-tu-tai-chinh', icon: '📈' },
+  { code: '6511', name: 'Bảo hiểm và môi giới bảo hiểm', slug: '6511-bao-hiem', icon: '🛡️' },
+  { code: '7310', name: 'Quảng cáo, truyền thông & Marketing', slug: '7310-quang-cao-marketing', icon: '📢' },
+  { code: '7020', name: 'Tư vấn quản lý & Quản trị kinh doanh', slug: '7020-tu-van-quan-ly', icon: '👔' },
+  { code: '5610', name: 'Nhà hàng, quán ăn & Dịch vụ ẩm thực', slug: '5610-nha-hang-an-uong', icon: '🍽️' },
+  { code: '1410', name: 'Sản xuất hàng may mặc & Thời trang', slug: '1410-may-mac-thoi-trang', icon: '👗' },
+  { code: '2592', name: 'Gia công cơ khí & Kim loại', slug: '2592-gia-cong-co-khi', icon: '⚙️' },
+  { code: '8559', name: 'Giáo dục mầm non, phổ thông & Đào tạo', slug: '8559-giao-duc-dao-tao', icon: '🎓' },
+  { code: '7912', name: 'Dịch vụ lữ hành, du lịch & Khách sạn', slug: '7912-du-lich-khach-san', icon: '✈️' },
+  { code: '3511', name: 'Sản xuất & Phân phối năng lượng, điện', slug: '3511-dien-nang-luong', icon: '⚡' },
+  { code: '0111', name: 'Trồng trọt, chăn nuôi & Nông sản', slug: '0111-nong-nghiep-nong-san', icon: '🌾' }
+];
 
 export const db = new Database();

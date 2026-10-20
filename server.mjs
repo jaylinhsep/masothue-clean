@@ -4,7 +4,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { gotScraping } from 'got-scraping';
 import { MasothueCrawler } from './crawler.mjs';
-import { db } from './database.mjs';
+import { db, VIETNAM_PROVINCES, TOP_INDUSTRIES } from './database.mjs';
 import { seoRenderer } from './seoRenderer.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,6 +66,88 @@ app.get('/sitemap.xml', async (req, res) => {
   const slugs = await db.getAllSlugs();
   res.type('application/xml');
   res.send(seoRenderer.renderSitemap(slugs, req.headers.host));
+});
+
+// ==========================================
+// 2B. SEO SILO & HUB DIRECTORY ROUTES
+// ==========================================
+
+// Hub 1: Danh bạ 63 Tỉnh Thành
+app.get('/tinh-thanh', async (req, res) => {
+  try {
+    const stats = await db.getProvinceStats();
+    const html = seoRenderer.renderProvincesIndexPage(stats, req.headers.host);
+    res.send(html);
+  } catch (err) {
+    console.error('[Hub Provinces Error]:', err);
+    res.status(500).send('Lỗi máy chủ khi tải danh bạ tỉnh thành.');
+  }
+});
+
+// Hub 1b: Chi tiết Tỉnh Thành
+app.get('/tinh-thanh/:slug', async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const prov = VIETNAM_PROVINCES.find(p => p.slug === slug);
+    if (!prov) return res.redirect('/tinh-thanh');
+
+    const page = parseInt(req.query.page, 10) || 1;
+    const data = await db.getCompaniesByProvincePaginated(prov.name, page, 24);
+    const html = seoRenderer.renderProvinceDetailPage(prov, data, req.headers.host);
+    res.send(html);
+  } catch (err) {
+    console.error('[Hub Province Detail Error]:', err);
+    res.status(500).send('Lỗi máy chủ khi tải danh bạ tỉnh thành.');
+  }
+});
+
+// Hub 2: Danh bạ Ngành Nghề
+app.get('/nganh-nghe', async (req, res) => {
+  try {
+    const stats = await db.getTopIndustriesWithCounts();
+    const html = seoRenderer.renderIndustriesIndexPage(stats, req.headers.host);
+    res.send(html);
+  } catch (err) {
+    console.error('[Hub Industries Error]:', err);
+    res.status(500).send('Lỗi máy chủ khi tải danh bạ ngành nghề.');
+  }
+});
+
+// Hub 2b: Chi tiết Ngành Nghề
+app.get('/nganh-nghe/:slug', async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    let ind = TOP_INDUSTRIES.find(i => i.slug === slug || i.code === slug);
+    if (!ind) {
+      const codeMatch = slug.match(/^(\d{4})/);
+      if (codeMatch) {
+        ind = { code: codeMatch[1], name: `Ngành nghề mã ${codeMatch[1]}`, slug };
+      } else {
+        ind = { code: slug, name: `Ngành ${slug}`, slug };
+      }
+    }
+
+    const page = parseInt(req.query.page, 10) || 1;
+    const data = await db.getCompaniesByIndustryPaginated(ind.code, page, 24);
+    const html = seoRenderer.renderIndustryDetailPage(ind, data, req.headers.host);
+    res.send(html);
+  } catch (err) {
+    console.error('[Hub Industry Detail Error]:', err);
+    res.status(500).send('Lỗi máy chủ khi tải ngành nghề.');
+  }
+});
+
+// Hub 3: Doanh nghiệp Mới Thành Lập / Cập Nhật Gần Đây
+app.get('/doanh-nghiep-moi', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const data = await db.getRecentCompaniesPaginated(page, 24);
+    const html = seoRenderer.renderRecentCompaniesPage(data, req.headers.host);
+    res.send(html);
+  } catch (err) {
+    console.error('[Hub Recent Error]:', err);
+    res.status(500).send('Lỗi máy chủ khi tải doanh nghiệp mới.');
+  }
 });
 
 // Helper: Render company page by slug or taxId

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body class="light-theme">
   <!-- Toast Container -->
@@ -37,6 +37,12 @@
           <span class="brand-subtitle">Tra cứu thông tin công ty • Không quảng cáo • Tốc độ cao</span>
         </div>
       </div>
+
+      <nav class="hub-nav-menu">
+        <a href="/tinh-thanh" class="hub-nav-link">📍 Tỉnh thành</a>
+        <a href="/nganh-nghe" class="hub-nav-link">🏭 Ngành nghề</a>
+        <a href="/doanh-nghiep-moi" class="hub-nav-link">⚡ Mới cập nhật</a>
+      </nav>
 
       <div class="nav-actions">
         <button id="btn-open-history" class="btn-icon" title="Lịch sử tra cứu">
@@ -113,6 +119,18 @@
             <button class="chip" data-query="0300588569">0300588569 (Vinamilk)</button>
             <button class="chip" data-query="Tập đoàn Vingroup">Vingroup</button>
             <button class="chip" data-query="Thế Giới Di Động">Thế Giới Di Động</button>
+          </div>
+
+          <!-- Hub Quick Links (SEO SILO Internal Links) -->
+          <div class="homepage-hub-bar" style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; font-size: 0.88rem;">
+            <span style="color: var(--text-muted); font-weight: 500; display: flex; align-items: center;">Danh bạ:</span>
+            <a href="/tinh-thanh/tp-ho-chi-minh" class="chip" style="text-decoration:none;">📍 TP.HCM</a>
+            <a href="/tinh-thanh/ha-noi" class="chip" style="text-decoration:none;">📍 Hà Nội</a>
+            <a href="/tinh-thanh/da-nang" class="chip" style="text-decoration:none;">📍 Đà Nẵng</a>
+            <a href="/tinh-thanh/binh-duong" class="chip" style="text-decoration:none;">📍 Bình Dương</a>
+            <a href="/tinh-thanh" class="chip" style="text-decoration:none; font-weight:700; color:var(--primary);">Tất cả 63 Tỉnh Thành →</a>
+            <a href="/nganh-nghe" class="chip" style="text-decoration:none; font-weight:700; color:var(--primary);">🏭 Ngành nghề →</a>
+            <a href="/doanh-nghiep-moi" class="chip" style="text-decoration:none; font-weight:700; color:var(--accent-green);">⚡ Doanh nghiệp mới →</a>
           </div>
         </div>
       </div>
