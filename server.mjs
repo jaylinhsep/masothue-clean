@@ -6,6 +6,7 @@ import { gotScraping } from 'got-scraping';
 import { MasothueCrawler } from './crawler.mjs';
 import { db, VIETNAM_PROVINCES, TOP_INDUSTRIES } from './database.mjs';
 import { seoRenderer } from './seoRenderer.mjs';
+import { indexNowService } from './indexnow.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -320,6 +321,34 @@ app.get('/api/og/:taxId', async (req, res) => {
 });
 
 // ==========================================
+// INDEXNOW PROTOCOL (Instant Search Engine Indexing)
+// ==========================================
+
+// Key file verification endpoint (e.g. /4d8b671a53e944f2b988f01b7a2d3e5a.txt)
+app.get(/^\/([a-f0-9]{32})\.txt$/, (req, res) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.send(req.params[0]);
+});
+
+// IndexNow Status & Monitoring
+app.get('/api/indexnow/status', (req, res) => {
+  res.json(indexNowService.getStatus());
+});
+
+// Trigger Instant Submission of Top N Recent Companies
+app.all('/api/indexnow/submit-recent', async (req, res) => {
+  const limit = Math.min(100, Math.max(5, parseInt(req.query.limit, 10) || 50));
+  const result = await indexNowService.submitRecentFromDb(db, limit);
+  res.json(result);
+});
+
+// Ping Google & Bing Sitemaps
+app.all('/api/indexnow/ping-sitemaps', async (req, res) => {
+  const result = await indexNowService.pingSitemaps();
+  res.json({ success: true, result });
+});
+
+// ==========================================
 // API ROUTES
 // ==========================================
 
@@ -552,7 +581,19 @@ function startServer(p) {
     console.log(`  Trang chủ:      http://localhost:${p}`);
     console.log(`  Sitemap XML:    http://localhost:${p}/sitemap.xml`);
     console.log(`  Robots.txt:     http://localhost:${p}/robots.txt`);
+    console.log(`  IndexNow Key:   https://mst0.com/${indexNowService.key}.txt`);
     console.log(`======================================================\n`);
+
+    // On startup: notify IndexNow with recent companies and hubs (in background)
+    setTimeout(async () => {
+      try {
+        console.log('[IndexNow] Đang kích hoạt thông báo tự động tới công cụ tìm kiếm...');
+        await indexNowService.submitRecentFromDb(db, 30);
+        await indexNowService.pingSitemaps();
+      } catch (e) {
+        console.warn('[IndexNow] Startup notification skipped:', e.message);
+      }
+    }, 12000);
   });
 
   server.on('error', (err) => {

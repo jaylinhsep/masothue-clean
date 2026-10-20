@@ -2,6 +2,7 @@ import { createClient } from '@libsql/client';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { indexNowService } from './indexnow.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -313,6 +314,9 @@ export class Database {
           now
         ]
       });
+      if (cleanSlug) {
+        indexNowService.queueCompany(cleanSlug);
+      }
       return true;
     } catch (err) {
       console.error('[DB] Lỗi lưu công ty:', err);
