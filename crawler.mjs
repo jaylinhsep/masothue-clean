@@ -217,6 +217,88 @@ export class MasothueCrawler {
     }
   }
 
+  // --- Enrich Tax ID via Serper Google Snippet (Bypasses Cloudflare 100%) ---
+  async enrichViaSerper(taxId, companyName = '') {
+    const serperKey = process.env.SERPER_API_KEY || process.env.SERPER_KEY;
+    if (!serperKey || !taxId) return null;
+
+    try {
+      const res = await fetch('https://google.serper.dev/search', {
+        method: 'POST',
+        headers: {
+          'X-API-KEY': serperKey.trim(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          q: `${taxId} "đại diện"`,
+          gl: 'vn',
+          hl: 'vi',
+          num: 5
+        })
+      });
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data.organic || data.organic.length === 0) return null;
+
+      let representative = '';
+      let phone = '';
+      let startDate = '';
+      let managedBy = '';
+
+      for (const item of data.organic) {
+        const text = `${item.title || ''} ; ${item.snippet || ''}`;
+
+        if (!representative) {
+          const repMatch = text.match(/(?:Đại diện pháp luật|Người đại diện theo pháp luật|Người đại diện|Đại diện)[:\s,]+([^;·–\n]+)/i);
+          if (repMatch) {
+            let r = repMatch[1].trim()
+              .replace(/\s*(Ngoài ra.*|\d{10}.*|Ẩn số điện thoại.*|Chức vụ.*)$/i, '')
+              .replace(/^[,\-–\s]+|[,\-–\s]+$/g, '')
+              .trim();
+            if (r.length >= 2 && r.length <= 60 && !r.includes('http') && !r.includes('...')) {
+              representative = r;
+            }
+          }
+        }
+
+        if (!phone) {
+          const phoneMatch = text.match(/(?:Điện thoại|SĐT|Phone)[:\s,]+([0-9\s.\-+]{8,15})/i);
+          if (phoneMatch) phone = phoneMatch[1].trim();
+        }
+
+        if (!startDate) {
+          const dateMatch = text.match(/(?:Ngày hoạt động|Ngày cấp|Hoạt động từ)[:\s,]+([0-9\-\/]{8,10})/i);
+          if (dateMatch) {
+            startDate = dateMatch[1].trim();
+          } else if (item.date) {
+            startDate = item.date;
+          }
+        }
+
+        if (!managedBy) {
+          const managedMatch = text.match(/(?:Quản lý bởi|Cơ quan thuế|Chi cục Thuế|Cục Thuế)[:\s,]*([^;·–\n]+)/i);
+          if (managedMatch) {
+            let m = managedMatch[0].trim().replace(/^[,\-–\s]+|[,\-–\s]+$/g, '');
+            if (m.length >= 4 && m.length <= 80) managedBy = m;
+          }
+        }
+      }
+
+      if (representative || phone || startDate || managedBy) {
+        return {
+          representative: representative || '',
+          phone: phone || '',
+          startDate: startDate || '',
+          managedBy: managedBy || 'Cơ quan Thuế'
+        };
+      }
+    } catch (err) {
+      console.warn('[enrichViaSerper error]', err.message);
+    }
+    return null;
+  }
+
   // --- Serper.dev (Free 2,500 Google Searches) Fallback ---
   async searchViaSerper(query) {
     const serperKey = process.env.SERPER_API_KEY || process.env.SERPER_KEY;
@@ -256,8 +338,13 @@ export class MasothueCrawler {
           if (!path.startsWith('/')) path = '/' + path;
 
           let rep = '';
-          const repMatch = (item.snippet || '').match(/(?:Đại diện pháp luật|Người đại diện|Đại diện):\s*([^·,–\n\-]+)/i);
-          if (repMatch) rep = repMatch[1].trim();
+          const repMatch = (item.snippet || '').match(/(?:Đại diện pháp luật|Người đại diện theo pháp luật|Người đại diện|Đại diện)[:\s,]+([^;·–\n]+)/i);
+          if (repMatch) {
+            rep = repMatch[1].trim()
+              .replace(/\s*(Ngoài ra.*|\d{10}.*|Ẩn số điện thoại.*|Chức vụ.*)$/i, '')
+              .replace(/^[,\-–\s]+|[,\-–\s]+$/g, '')
+              .trim();
+          }
 
           items.push({
             name: cleanName,
@@ -345,22 +432,42 @@ export class MasothueCrawler {
         const cleanSlug = (dbCompany.slug || `${dbCompany.taxId}-${this.slugify(dbCompany.name)}`).replace(/^\/?(mst\/)?/, '');
         try {
           const freshDetail = await this.getDetail(`/${cleanSlug}`, true);
-          if (freshDetail.success && freshDetail.data && (freshDetail.data.representative || freshDetail.data.managedBy)) {
-            await db.saveCompany(freshDetail.data);
+          let serperInfo = null;
+          if (!freshDetail.success || !freshDetail.data?.representative) {
+            serperInfo = await this.enrichViaSerper(q, dbCompany.name);
+          }
+
+          const rep = freshDetail.data?.representative || serperInfo?.representative || '';
+          const phone = freshDetail.data?.phone || serperInfo?.phone || '';
+          const startDate = freshDetail.data?.startDate || serperInfo?.startDate || '';
+          const managedBy = (freshDetail.data?.managedBy && freshDetail.data.managedBy !== 'Cơ quan Thuế') 
+            ? freshDetail.data.managedBy 
+            : (serperInfo?.managedBy || dbCompany.data?.managedBy || 'Cơ quan Thuế');
+
+          if (rep || (managedBy && managedBy !== 'Cơ quan Thuế')) {
+            const enriched = {
+              ...dbCompany.data,
+              ...(freshDetail.data || {}),
+              representative: rep,
+              phone: phone || dbCompany.data?.phone || '',
+              startDate: startDate || dbCompany.data?.startDate || '',
+              managedBy: managedBy
+            };
+            await db.saveCompany(enriched);
             const targetUrl = `/${cleanSlug}`;
             return {
               success: true,
               isDirect: true,
               directUrl: targetUrl,
-              detail: freshDetail.data,
+              detail: enriched,
               items: [{
-                name: freshDetail.data.name,
+                name: enriched.name,
                 url: targetUrl,
-                taxId: freshDetail.data.taxId,
-                representative: freshDetail.data.representative || '',
-                address: freshDetail.data.address,
-                status: freshDetail.data.status || 'Đang hoạt động',
-                province: db.extractProvince(freshDetail.data.address),
+                taxId: enriched.taxId,
+                representative: rep,
+                address: enriched.address,
+                status: enriched.status || 'Đang hoạt động',
+                province: db.extractProvince(enriched.address),
                 autoExpand: true
               }],
               currentPage: 1,
@@ -376,22 +483,27 @@ export class MasothueCrawler {
       // Priority 2: If not in DB, fetch from VietQR and automatically enrich full details!
       const vCompany = await this.getFromVietQR(q);
       if (vCompany) {
-        // Automatically enrich via slug to get representative, phone, startDate, tax office, industries
+        // Automatically enrich via slug or Serper to get representative, phone, startDate, tax office
         const slug = `${vCompany.taxId}-${this.slugify(vCompany.name)}`;
         let enrichedData = { ...vCompany };
         try {
           const detail = await this.getDetail(`/${slug}`, true);
-          if (detail.success && detail.data) {
-            enrichedData = {
-              ...vCompany,
-              ...detail.data,
-              representative: detail.data.representative || vCompany.representative || '',
-              phone: detail.data.phone || vCompany.phone || '',
-              startDate: detail.data.startDate || vCompany.startDate || '',
-              managedBy: (detail.data.managedBy && detail.data.managedBy !== 'Cơ quan Thuế') ? detail.data.managedBy : (vCompany.managedBy || 'Cơ quan Thuế'),
-              industries: Array.isArray(detail.data.industries) && detail.data.industries.length > 0 ? detail.data.industries : vCompany.industries
-            };
+          let serperInfo = null;
+          if (!detail.success || !detail.data?.representative) {
+            serperInfo = await this.enrichViaSerper(q, vCompany.name);
           }
+
+          enrichedData = {
+            ...vCompany,
+            ...(detail.data || {}),
+            representative: detail.data?.representative || serperInfo?.representative || vCompany.representative || '',
+            phone: detail.data?.phone || serperInfo?.phone || vCompany.phone || '',
+            startDate: detail.data?.startDate || serperInfo?.startDate || vCompany.startDate || '',
+            managedBy: (detail.data?.managedBy && detail.data.managedBy !== 'Cơ quan Thuế') 
+              ? detail.data.managedBy 
+              : (serperInfo?.managedBy || vCompany.managedBy || 'Cơ quan Thuế'),
+            industries: Array.isArray(detail.data?.industries) && detail.data.industries.length > 0 ? detail.data.industries : vCompany.industries
+          };
         } catch (e) {
           console.warn('[Search Auto-Enrich Error]', e.message);
         }
@@ -592,18 +704,18 @@ export class MasothueCrawler {
       }
     }
 
-    // --- FALLBACK 1: Real-time Google Custom Search API ---
-    const googleResult = await this.searchViaGoogle(effectiveQ);
-    if (googleResult && googleResult.items && googleResult.items.length > 0) {
-      this.setCache(cacheKey, googleResult);
-      return googleResult;
-    }
-
-    // --- FALLBACK 3: Serper.dev Google Search API ---
+    // --- Priority 1 for Real-time Cloud Fallback: Serper.dev Google API (Active) ---
     const serperResult = await this.searchViaSerper(effectiveQ);
     if (serperResult && serperResult.items && serperResult.items.length > 0) {
       this.setCache(cacheKey, serperResult);
       return serperResult;
+    }
+
+    // --- Priority 2: Real-time Google Custom Search API ---
+    const googleResult = await this.searchViaGoogle(effectiveQ);
+    if (googleResult && googleResult.items && googleResult.items.length > 0) {
+      this.setCache(cacheKey, googleResult);
+      return googleResult;
     }
 
     // --- FALLBACK 4: If query contains tax digits, try VietQR ---
@@ -670,14 +782,20 @@ export class MasothueCrawler {
       });
 
       if (res.statusCode !== 200) {
-        if (existingInDb && existingInDb.data) {
+        if (existingInDb && existingInDb.data && (existingInDb.representative || existingInDb.data.representative)) {
           return { success: true, data: existingInDb.data, fromDb: true };
         }
         if (taxMatch) {
           const vCompany = await this.getFromVietQR(taxMatch[1]);
           if (vCompany) {
-            await db.saveCompany(vCompany);
-            return { success: true, data: vCompany };
+            const serperInfo = await this.enrichViaSerper(taxMatch[1], vCompany.name);
+            const finalCompany = serperInfo ? {
+              ...vCompany,
+              ...serperInfo,
+              managedBy: serperInfo.managedBy || vCompany.managedBy || 'Cơ quan Thuế'
+            } : vCompany;
+            await db.saveCompany(finalCompany);
+            return { success: true, data: finalCompany };
           }
         }
         return { success: false, message: `Không thể tải thông tin doanh nghiệp (HTTP ${res.statusCode}).` };
@@ -687,14 +805,20 @@ export class MasothueCrawler {
 
       const name = $('table.table-taxinfo thead th[itemprop="name"]').text().trim() || $('h1').first().text().trim();
       if (!name) {
-        if (existingInDb && existingInDb.data) {
+        if (existingInDb && existingInDb.data && (existingInDb.representative || existingInDb.data.representative)) {
           return { success: true, data: existingInDb.data, fromDb: true };
         }
         if (taxMatch) {
           const vCompany = await this.getFromVietQR(taxMatch[1]);
           if (vCompany) {
-            await db.saveCompany(vCompany);
-            return { success: true, data: vCompany };
+            const serperInfo = await this.enrichViaSerper(taxMatch[1], vCompany.name);
+            const finalCompany = serperInfo ? {
+              ...vCompany,
+              ...serperInfo,
+              managedBy: serperInfo.managedBy || vCompany.managedBy || 'Cơ quan Thuế'
+            } : vCompany;
+            await db.saveCompany(finalCompany);
+            return { success: true, data: finalCompany };
           }
         }
         return { success: false, message: 'Không tìm thấy thông tin doanh nghiệp này.' };
@@ -778,14 +902,20 @@ export class MasothueCrawler {
       return { success: true, data: info };
     } catch (err) {
       console.warn('[Crawler] getDetail error:', err.message);
-      if (existingInDb && existingInDb.data) {
+      if (existingInDb && existingInDb.data && (existingInDb.representative || existingInDb.data.representative)) {
         return { success: true, data: existingInDb.data, fromDb: true };
       }
       if (taxMatch) {
         const vCompany = await this.getFromVietQR(taxMatch[1]);
         if (vCompany) {
-          await db.saveCompany(vCompany);
-          return { success: true, data: vCompany };
+          const serperInfo = await this.enrichViaSerper(taxMatch[1], vCompany.name);
+          const finalCompany = serperInfo ? {
+            ...vCompany,
+            ...serperInfo,
+            managedBy: serperInfo.managedBy || vCompany.managedBy || 'Cơ quan Thuế'
+          } : vCompany;
+          await db.saveCompany(finalCompany);
+          return { success: true, data: finalCompany };
         }
       }
       return { success: false, message: 'Lỗi kết nối khi tải chi tiết doanh nghiệp.' };
