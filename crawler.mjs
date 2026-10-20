@@ -80,6 +80,10 @@ export class MasothueCrawler {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
       });
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('retry-after'), 10) || 60;
+        return { isRateLimited: true, retryAfter };
+      }
       if (!res.ok) return null;
       const json = await res.json();
       if (json && json.code === '00' && json.data) {
@@ -237,6 +241,10 @@ export class MasothueCrawler {
         })
       });
 
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('retry-after'), 10) || 60;
+        return { isRateLimited: true, retryAfter };
+      }
       if (!res.ok) return null;
       let data = await res.json();
       if (!data.organic || data.organic.length === 0) {
@@ -337,6 +345,10 @@ export class MasothueCrawler {
         })
       });
 
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('retry-after'), 10) || 60;
+        return { isRateLimited: true, retryAfter };
+      }
       if (!res.ok) return null;
       let data = await res.json();
       if (!data.organic || data.organic.length === 0) {

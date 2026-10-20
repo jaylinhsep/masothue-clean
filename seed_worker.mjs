@@ -183,6 +183,9 @@ async function runWorker() {
 
     const taxId = nineDigits + checkDigit;
 
+    // Hiển thị tiến độ quét liên tục theo thời gian thực (không để màn hình bị đứng)
+    process.stdout.write(`\r🔍 [Đang quét] MST: ${taxId} | Đã lưu: ${state.totalSaved} | Serper: ${state.serperUsedToday}/${MAX_SERPER_PER_DAY}   `);
+
     // Check if already in DB
     const existing = await db.getCompanyByTaxId(taxId);
     if (existing && existing.representative && existing.representative.trim().length > 2) {
@@ -200,18 +203,31 @@ async function runWorker() {
       continue;
     }
 
+    // Xử lý khi VietQR yêu cầu tạm nghỉ (HTTP 429)
+    if (vCompany && vCompany.isRateLimited) {
+      const waitSec = Math.min(vCompany.retryAfter || 60, 300);
+      console.log(`\n\n⏸️  [VIETQR HẠ NHIỆT] Cổng VietQR đang yêu cầu tạm nghỉ để tránh spam.`);
+      for (let s = waitSec; s > 0; s--) {
+        process.stdout.write(`\r   ⏳ Tự động tiếp tục sau: ${s} giây... `);
+        await sleep(1000);
+      }
+      process.stdout.write('\r   ✓ Đã hết thời gian chờ! Đang tiếp tục quét...\n\n');
+      currentRange.current--; // Không bỏ sót số này
+      continue;
+    }
+
     if (!vCompany || !vCompany.name) {
       // Mã số thuế này chưa được cấp hoặc chưa hoạt động
-      // Lưu state định kỳ mỗi 20 số
-      if (currentNum % 20 === 0) {
+      // Lưu state định kỳ mỗi 10 số
+      if (currentNum % 10 === 0) {
         saveState(state);
       }
-      await sleep(150);
+      await sleep(650);
       continue;
     }
 
     // PHÁT HIỆN DOANH NGHIỆP THẬT!
-    console.log(`\n🏢 [TÌM THẤY DOANH NGHIỆP] MST: ${taxId}`);
+    console.log(`\n\n🏢 [TÌM THẤY DOANH NGHIỆP] MST: ${taxId}`);
     console.log(`   Tên: ${vCompany.name}`);
     console.log(`   Địa chỉ: ${vCompany.address}`);
 
