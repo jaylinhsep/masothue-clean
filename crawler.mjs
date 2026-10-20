@@ -250,14 +250,15 @@ export class MasothueCrawler {
         const text = `${item.title || ''} ; ${item.snippet || ''}`;
 
         if (!representative) {
-          const repMatch = text.match(/(?:Người đại diện theo pháp luật|Đại diện theo pháp luật|Người đại diện pháp luật|Đại diện pháp luật|Người đại diện|Đại diện)[:\s,]+([^;·–\n]+)/i);
+          const repMatch = text.match(/(?:Người đại diện theo pháp luật|Đại diện theo pháp luật|Người đại diện pháp luật|Đại diện pháp luật|Người đại diện)[:\s,]+([^;·–\n]+)/i);
           if (repMatch) {
             let r = repMatch[1].trim()
               .replace(/^(theo pháp luật|theo uỷ quyền)[\s.:,-]+/i, '')
               .replace(/\s*(Ngoài ra.*|\d{10}.*|Ẩn số điện thoại.*|Chức vụ.*)$/i, '')
               .replace(/^[,\-–\s.:]+|[,\-–\s.:]+$/g, '')
               .trim();
-            if (r.length >= 2 && r.length <= 60 && !r.includes('http') && !r.includes('...')) {
+            const isCompanyWord = /(công ty|tnhh|cổ phần|chi nhánh|văn phòng|tập đoàn|doanh nghiệp)/i.test(r);
+            if (!isCompanyWord && r.length >= 2 && r.length <= 60 && !r.includes('http') && !r.includes('...')) {
               representative = r;
             }
           }
@@ -339,13 +340,17 @@ export class MasothueCrawler {
           if (!path.startsWith('/')) path = '/' + path;
 
           let rep = '';
-          const repMatch = (item.snippet || '').match(/(?:Người đại diện theo pháp luật|Đại diện theo pháp luật|Người đại diện pháp luật|Đại diện pháp luật|Người đại diện|Đại diện)[:\s,]+([^;·–\n]+)/i);
+          const repMatch = (item.snippet || '').match(/(?:Người đại diện theo pháp luật|Đại diện theo pháp luật|Người đại diện pháp luật|Đại diện pháp luật|Người đại diện)[:\s,]+([^;·–\n]+)/i);
           if (repMatch) {
-            rep = repMatch[1].trim()
+            let r = repMatch[1].trim()
               .replace(/^(theo pháp luật|theo uỷ quyền)[\s.:,-]+/i, '')
               .replace(/\s*(Ngoài ra.*|\d{10}.*|Ẩn số điện thoại.*|Chức vụ.*)$/i, '')
               .replace(/^[,\-–\s.:]+|[,\-–\s.:]+$/g, '')
               .trim();
+            const isCompanyWord = /(công ty|tnhh|cổ phần|chi nhánh|văn phòng|tập đoàn|doanh nghiệp)/i.test(r);
+            if (!isCompanyWord && r.length >= 2 && r.length <= 60) {
+              rep = r;
+            }
           }
 
           items.push({
