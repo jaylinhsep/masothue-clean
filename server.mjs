@@ -99,7 +99,7 @@ async function handleCompanyPage(req, res, slug) {
         <html lang="vi">
         <head>
           <meta charset="UTF-8"><title>Không tìm thấy doanh nghiệp</title>
-          <link rel="stylesheet" href="/style.css?v=5">
+          <link rel="stylesheet" href="/style.css?v=7">
         </head>
         <body style="text-align: center; padding: 60px 20px; font-family: sans-serif;">
           <h2>Không tìm thấy thông tin doanh nghiệp này</h2>

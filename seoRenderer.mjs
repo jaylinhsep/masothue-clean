@@ -108,7 +108,7 @@ export class SeoRenderer {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=6">
+  <link rel="stylesheet" href="/style.css?v=7">
 </head>
 <body class="light-theme">
   <!-- Toast Container -->
@@ -145,23 +145,61 @@ export class SeoRenderer {
 
   <main class="main-content ssr-main-container">
     <!-- Breadcrumb navigation -->
-    <nav aria-label="Breadcrumb" class="ssr-breadcrumb" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">
-      <a href="/" style="color: var(--primary); text-decoration: none;">Trang chủ</a> &rsaquo;
-      <span>Tra cứu mã số thuế</span> &rsaquo;
-      <span style="color: var(--text-main); font-weight: 600;">${this.escape(d.name)}</span>
+    <nav aria-label="Breadcrumb" class="ssr-breadcrumb">
+      <ol class="ssr-breadcrumb-list">
+        <li class="ssr-breadcrumb-item">
+          <a href="/" class="ssr-breadcrumb-link">
+            <svg class="ssr-breadcrumb-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            <span>Trang chủ</span>
+          </a>
+        </li>
+        <li class="ssr-breadcrumb-sep" aria-hidden="true">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </li>
+        <li class="ssr-breadcrumb-item">
+          <a href="/" class="ssr-breadcrumb-link">Tra cứu mã số thuế</a>
+        </li>
+        <li class="ssr-breadcrumb-sep" aria-hidden="true">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </li>
+        <li class="ssr-breadcrumb-item ssr-breadcrumb-item--current" aria-current="page">
+          <span class="ssr-breadcrumb-current" title="${this.escape(d.name)}">${this.escape(d.name)}</span>
+        </li>
+      </ol>
     </nav>
 
     <!-- Quick Search on SSR Page -->
-    <div class="ssr-search-bar" style="margin-bottom: 18px;">
+    <div class="ssr-search-wrapper">
       <form action="/" method="GET" class="ssr-search-form" onsubmit="const val = document.getElementById('ssr-search-input').value.trim(); if(val) window.location.href='/?q=' + encodeURIComponent(val); return false;">
-        <input 
-          type="text" 
-          id="ssr-search-input" 
-          class="ssr-search-input" 
-          placeholder="🔍 Nhập mã số thuế hoặc tên công ty khác để tra cứu..." 
-          required
-        >
-        <button type="submit" class="ssr-search-btn">Tìm</button>
+        <div class="ssr-search-input-box">
+          <svg class="ssr-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input 
+            type="text" 
+            id="ssr-search-input" 
+            name="q"
+            class="ssr-search-input" 
+            placeholder="Nhập mã số thuế, tên công ty hoặc người đại diện để tra cứu nhanh..." 
+            autocomplete="off"
+            required
+          >
+        </div>
+        <button type="submit" class="ssr-search-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <span>Tra cứu</span>
+        </button>
       </form>
     </div>
 
@@ -307,7 +345,7 @@ export class SeoRenderer {
           </h3>
           <div style="display: flex; flex-direction: column; gap: 10px;">
             ${relatedCompanies.map(rel => `
-              <a href="/mst/${this.escape(rel.slug)}" class="drawer-item" style="text-decoration: none; display: block;">
+              <a href="/${this.escape(rel.slug)}" class="drawer-item" style="text-decoration: none; display: block;">
                 <div class="drawer-item-title">${this.escape(rel.name)}</div>
                 <div class="drawer-item-sub">
                   <span>MST: <strong>${this.escape(rel.taxId)}</strong></span>
