@@ -321,6 +321,40 @@ async function executeSearch(query, type = 'auto', page = 1) {
   }
 }
 
+function slugify(text) {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function getCompanySlug(item) {
+  if (!item) return '';
+  if (item.slug) return item.slug.replace(/^\/?(mst\/)?/, '');
+  if (item.url) return item.url.replace(/^\/?(mst\/)?/, '');
+  const cleanTax = (item.taxId || '').trim();
+  const cleanName = slugify(item.name || '');
+  return cleanTax ? `${cleanTax}-${cleanName}` : cleanName;
+}
+
+function copyCompanyShareLink(item) {
+  const slug = getCompanySlug(item);
+  const fullUrl = `${window.location.origin}/${slug}`;
+  copyToClipboard(fullUrl, 'Đã sao chép link chia sẻ doanh nghiệp');
+}
+
+function handleCompanyLinkClick(event, cardEl, item) {
+  if (event.ctrlKey || event.metaKey || event.button === 1) {
+    return;
+  }
+  event.preventDefault();
+  toggleCardAccordion(cardEl, item);
+}
+
 // --- Render Search Results ---
 function renderResults(items, currentPage, maxPage) {
   state.currentPage = currentPage;
@@ -336,13 +370,15 @@ function renderResults(items, currentPage, maxPage) {
     card.id = `company-card-${index}`;
     
     const isSaved = state.bookmarks.some(b => b.taxId === item.taxId || b.url === item.url);
+    const slug = getCompanySlug(item);
+    const cleanUrl = '/' + slug;
 
     card.innerHTML = `
       <div class="card-header-bar" onclick="toggleCardAccordion(document.getElementById('company-card-${index}'), ${escapeHtml(JSON.stringify(item))})">
         <div class="card-title-group">
-          <h3 class="company-title-link">
+          <a href="${cleanUrl}" class="company-title-link" onclick="handleCompanyLinkClick(event, document.getElementById('company-card-${index}'), ${escapeHtml(JSON.stringify(item))})">
             ${escapeHtml(item.name)}
-          </h3>
+          </a>
           <div class="card-badges" style="margin-top: 6px;">
             ${item.taxId ? `
               <span class="badge-mst" title="Bấm để sao chép MST" onclick="event.stopPropagation(); copyToClipboard('${item.taxId}', 'Đã sao chép MST: ${item.taxId}')">
@@ -416,6 +452,10 @@ async function toggleCardAccordion(cardEl, item, forceExpand = false) {
     if (btnToggle) {
       btnToggle.innerHTML = `<span>Sổ thông tin</span> <span class="arrow-icon">▼</span>`;
     }
+    // Restore search URL in address bar
+    if (state.currentQuery) {
+      window.history.pushState({ q: state.currentQuery }, '', `/?q=${encodeURIComponent(state.currentQuery)}&type=${state.currentType || 'auto'}`);
+    }
     return;
   }
 
@@ -423,6 +463,12 @@ async function toggleCardAccordion(cardEl, item, forceExpand = false) {
   cardEl.classList.add('is-expanded');
   if (btnToggle) {
     btnToggle.innerHTML = `<span>Thu gọn</span> <span class="arrow-icon">▲</span>`;
+  }
+
+  // Update browser URL bar dynamically to clean slug!
+  const slug = getCompanySlug(item);
+  if (slug) {
+    window.history.pushState({ slug }, '', '/' + slug);
   }
 
   // If already loaded, no need to refetch
@@ -520,6 +566,14 @@ function renderAccordionContent(data, container, item) {
           <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
         </svg>
         <span>Sao chép tóm tắt</span>
+      </button>
+
+      <button class="btn-tool" onclick="copyCompanyShareLink(${escapeHtml(JSON.stringify(data))})">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+        <span>Sao chép link chia sẻ</span>
       </button>
 
       <button class="btn-tool" onclick="window.print()">

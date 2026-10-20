@@ -67,28 +67,28 @@ app.get('/sitemap.xml', async (req, res) => {
   res.send(seoRenderer.renderSitemap(slugs, req.headers.host));
 });
 
-// 3. SEO Static URL Page: /mst/:slug
-app.get('/mst/:slug', async (req, res) => {
-  const { slug } = req.params;
+// Helper: Render company page by slug or taxId
+async function handleCompanyPage(req, res, slug) {
   if (!slug) return res.redirect('/');
+  const cleanSlug = slug.replace(/^\/?(mst\/)?/, '');
 
   try {
     // 1. Check if company already in Database
-    let company = (await db.getCompanyBySlug(slug)) || (await db.getCompanyByTaxId(slug));
+    let company = (await db.getCompanyBySlug(cleanSlug)) || (await db.getCompanyByTaxId(cleanSlug));
 
     // 2. If not in DB, crawl on demand and save to DB
     if (!company) {
-      if (/^\d{10}(-\d{3})?$/.test(slug)) {
-        const sRes = await crawler.search(slug);
+      if (/^\d{10}(-\d{3})?$/.test(cleanSlug)) {
+        const sRes = await crawler.search(cleanSlug);
         if (sRes.isDirect && sRes.detail) {
           await db.saveCompany(sRes.detail);
-          company = await db.getCompanyByTaxId(slug);
+          company = await db.getCompanyByTaxId(cleanSlug);
         }
       } else {
-        const dRes = await crawler.getDetail(slug);
+        const dRes = await crawler.getDetail('/' + cleanSlug);
         if (dRes.success && dRes.data) {
           await db.saveCompany(dRes.data);
-          company = (await db.getCompanyBySlug(slug)) || (await db.getCompanyByTaxId(dRes.data.taxId));
+          company = (await db.getCompanyBySlug(cleanSlug)) || (await db.getCompanyByTaxId(dRes.data.taxId));
         }
       }
     }
@@ -99,12 +99,12 @@ app.get('/mst/:slug', async (req, res) => {
         <html lang="vi">
         <head>
           <meta charset="UTF-8"><title>Không tìm thấy doanh nghiệp</title>
-          <link rel="stylesheet" href="/style.css?v=2">
+          <link rel="stylesheet" href="/style.css?v=5">
         </head>
-        <body style="text-align: center; padding: 60px 20px;">
+        <body style="text-align: center; padding: 60px 20px; font-family: sans-serif;">
           <h2>Không tìm thấy thông tin doanh nghiệp này</h2>
           <p style="color: #64748b; margin: 12px 0 24px;">Doanh nghiệp có thể chưa đăng ký hoặc mã số thuế không chính xác.</p>
-          <a href="/" class="btn-primary" style="display: inline-block; text-decoration: none;">Về trang chủ tra cứu</a>
+          <a href="/" class="btn-primary" style="display: inline-block; text-decoration: none; padding: 10px 20px; background: #2563eb; color: #fff; border-radius: 6px;">Về trang chủ tra cứu</a>
         </body>
         </html>
       `);
@@ -117,9 +117,19 @@ app.get('/mst/:slug', async (req, res) => {
     const html = seoRenderer.renderCompanyPage(company, related, req.headers.host);
     res.send(html);
   } catch (err) {
-    console.error(`[SEO Route Error] /mst/${slug}:`, err);
+    console.error(`[SEO Route Error] ${slug}:`, err);
     res.status(500).send('Lỗi máy chủ khi tải trang.');
   }
+}
+
+// 3. SEO Static URL Page: /mst/:slug
+app.get('/mst/:slug', async (req, res) => {
+  return handleCompanyPage(req, res, req.params.slug);
+});
+
+// 3b. SEO Clean Root Slug Page: /0101245486-tap-doan-vingroup... or /1801818511-001-...
+app.get(/^\/(\d{10}.*)/, async (req, res) => {
+  return handleCompanyPage(req, res, req.params[0]);
 });
 
 // ==========================================

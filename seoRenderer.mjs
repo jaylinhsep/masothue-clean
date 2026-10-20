@@ -15,7 +15,8 @@ export class SeoRenderer {
 
   renderCompanyPage(company, relatedCompanies = [], host = 'localhost:3000') {
     const domain = `http://${host}`;
-    const pageUrl = `${domain}/mst/${company.slug}`;
+    const cleanSlug = (company.slug || '').replace(/^\/?(mst\/)?/, '');
+    const pageUrl = `${domain}/${cleanSlug}`;
     const d = company.data || company;
     
     const s = (d.status || '').toLowerCase().trim();
@@ -107,7 +108,7 @@ export class SeoRenderer {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=5">
+  <link rel="stylesheet" href="/style.css?v=6">
 </head>
 <body class="light-theme">
   <!-- Toast Container -->
@@ -202,6 +203,14 @@ export class SeoRenderer {
             <rect width="12" height="8" x="6" y="14"/>
           </svg>
           <span>In / Xuất PDF</span>
+        </button>
+
+        <button class="btn-tool" onclick="copyShareUrl()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+          <span>Sao chép link chia sẻ</span>
         </button>
       </div>
 
@@ -398,6 +407,10 @@ NGÀNH NGHỀ CHÍNH: ${d.mainIndustry || 'N/A'}`)};
       copyToClipboard(companySummary, 'Đã sao chép tóm tắt công ty');
     }
 
+    function copyShareUrl() {
+      copyToClipboard(window.location.href, 'Đã sao chép liên kết chia sẻ');
+    }
+
     function filterIndustries(input) {
       const term = input.value.toLowerCase().trim();
       const rows = document.querySelectorAll('#ssr-industries-tbody tr');
@@ -422,7 +435,8 @@ NGÀNH NGHỀ CHÍNH: ${d.mainIndustry || 'N/A'}`)};
 
     for (const item of slugs) {
       const lastmod = item.updatedAt ? new Date(item.updatedAt).toISOString().split('T')[0] : now;
-      urls.push(`  <url>\n    <loc>${domain}/mst/${this.escape(item.slug)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`);
+      const clean = (item.slug || '').replace(/^\/?(mst\/)?/, '');
+      urls.push(`  <url>\n    <loc>${domain}/${this.escape(clean)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`);
     }
 
     return `<?xml version="1.0" encoding="UTF-8"?>
