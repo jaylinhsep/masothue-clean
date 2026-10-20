@@ -157,13 +157,22 @@ export class MasothueCrawler {
           let path = link.replace(/https?:\/\/(www\.)?masothue\.com/, '');
           if (!path.startsWith('/')) path = '/' + path;
 
+          let rep = '';
+          const repMatch = (item.snippet || '').match(/(?:Đại diện pháp luật|Người đại diện|Đại diện):\s*([^·,–\n\-]+)/i);
+          if (repMatch) rep = repMatch[1].trim();
+
           let address = '';
           if (item.snippet) {
-            const snipParts = item.snippet.split(' - ');
-            if (snipParts.length >= 2) {
-              address = snipParts.slice(1).join(' - ').replace(/\s+/g, ' ').trim();
+            const addrMatch = item.snippet.match(/(?:Địa chỉ|Địa chỉ thuế):\s*([^·\n]+)/i);
+            if (addrMatch) {
+              address = addrMatch[1].trim();
             } else {
-              address = item.snippet.replace(/\s+/g, ' ').trim();
+              const snipParts = item.snippet.split(' - ');
+              if (snipParts.length >= 2) {
+                address = snipParts.slice(1).join(' - ').replace(/\s+/g, ' ').trim();
+              } else {
+                address = item.snippet.replace(/\s+/g, ' ').trim();
+              }
             }
           }
 
@@ -171,7 +180,7 @@ export class MasothueCrawler {
             name: cleanName,
             url: path,
             taxId,
-            representative: '',
+            representative: rep,
             address: address || 'Toàn quốc'
           });
         }
@@ -183,10 +192,13 @@ export class MasothueCrawler {
       try {
         const firstCompany = await this.getFromVietQR(items[0].taxId);
         if (firstCompany) {
+          if (items[0].representative) {
+            firstCompany.representative = items[0].representative;
+          }
           await db.saveCompany(firstCompany);
           items[0].name = firstCompany.name || items[0].name;
           items[0].address = firstCompany.address || items[0].address;
-          items[0].representative = firstCompany.representative || '';
+          items[0].representative = firstCompany.representative || items[0].representative || '';
         }
       } catch (e) {}
 
@@ -243,11 +255,15 @@ export class MasothueCrawler {
           let path = link.replace(/https?:\/\/(www\.)?masothue\.com/, '');
           if (!path.startsWith('/')) path = '/' + path;
 
+          let rep = '';
+          const repMatch = (item.snippet || '').match(/(?:Đại diện pháp luật|Người đại diện|Đại diện):\s*([^·,–\n\-]+)/i);
+          if (repMatch) rep = repMatch[1].trim();
+
           items.push({
             name: cleanName,
             url: path,
             taxId,
-            representative: '',
+            representative: rep,
             address: item.snippet || 'Toàn quốc'
           });
         }
@@ -258,9 +274,13 @@ export class MasothueCrawler {
       try {
         const firstCompany = await this.getFromVietQR(items[0].taxId);
         if (firstCompany) {
+          if (items[0].representative) {
+            firstCompany.representative = items[0].representative;
+          }
           await db.saveCompany(firstCompany);
           items[0].name = firstCompany.name || items[0].name;
           items[0].address = firstCompany.address || items[0].address;
+          items[0].representative = firstCompany.representative || items[0].representative || '';
         }
       } catch (e) {}
 
