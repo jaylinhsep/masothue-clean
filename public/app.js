@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     el.searchType.value = type;
     executeSearch(q, type, 1);
   } else {
-    loadRecentCompanies();
+    // loadRecentCompanies(); // Clean minimalist homepage
   }
 });
 

@@ -160,21 +160,37 @@ async function main() {
         for (const item of res.items) {
           if (!item.taxId) continue;
           try {
-            // Lưu trực tiếp thông tin chuẩn xác từ kết quả tìm kiếm (Siêu nhanh & Không lo bị rate limit)
-            const companyToSave = {
-              taxId: item.taxId,
-              name: item.name,
-              representative: item.representative || '',
-              address: item.address || '',
-              status: 'Đang hoạt động'
-            };
+            // Thử lấy chi tiết đầy đủ (Đại diện, SĐT, Ngày hoạt động, Cơ quan thuế...)
+            let companyToSave = null;
+            if (item.url) {
+              try {
+                const detailRes = await crawler.getDetail(item.url);
+                if (detailRes && detailRes.success && detailRes.data) {
+                  companyToSave = detailRes.data;
+                }
+              } catch(e) {}
+            }
+
+            if (!companyToSave) {
+              companyToSave = {
+                taxId: item.taxId,
+                name: item.name,
+                representative: item.representative || '',
+                address: item.address || '',
+                status: 'Đang hoạt động'
+              };
+            }
 
             const saved = await db.saveCompany(companyToSave);
             if (saved) {
               totalSaved++;
               savedInBatch++;
-              process.stdout.write(`   ✓ [${item.taxId}] ${item.name.slice(0, 48)}\n`);
+              const extra = companyToSave.managedBy ? ` • Thuế: ${companyToSave.managedBy}` : '';
+              process.stdout.write(`   ✓ [${item.taxId}] ${item.name.slice(0, 36)}...${extra}\n`);
             }
+
+            // Nghỉ nhẹ 350ms giữa các công ty để đảm bảo an toàn kết nối
+            await new Promise(r => setTimeout(r, 350));
           } catch (itemErr) {
             // Bỏ qua lỗi từng item đơn lẻ
           }

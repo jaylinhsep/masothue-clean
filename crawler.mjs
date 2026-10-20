@@ -539,8 +539,8 @@ export class MasothueCrawler {
     if (taxMatch) {
       existingInDb = await db.getCompanyByTaxId(taxMatch[1]);
       if (existingInDb && existingInDb.data) {
-        // If it already has full industry list (>1 item), serve instantly from DB!
-        if (existingInDb.data.industries && existingInDb.data.industries.length > 1) {
+        // If it already has full industry list (>1 item) and full metadata, serve instantly from DB!
+        if (existingInDb.data.industries && existingInDb.data.industries.length > 1 && existingInDb.data.managedBy) {
           return { success: true, data: existingInDb.data, fromDb: true };
         }
       }
