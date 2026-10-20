@@ -18,9 +18,14 @@ export class SeoRenderer {
     const pageUrl = `${domain}/mst/${company.slug}`;
     const d = company.data || company;
     
-    const isDanger = (d.status || '').toLowerCase().includes('ngừng') || (d.status || '').toLowerCase().includes('đóng mã');
-    const statusClass = isDanger ? 'status-danger' : 'status-active';
-    const statusText = d.status || 'Đang hoạt động';
+    const s = (d.status || '').toLowerCase().trim();
+    let statusClass = 'status-active';
+    let statusText = d.status || 'Đang hoạt động';
+    if (s.includes('không hoạt động') || s.includes('ngừng') || s.includes('đóng mã') || s.includes('giải thể') || s.includes('khoá') || s.includes('bỏ trốn') || s.includes('phá sản')) {
+      statusClass = 'status-danger';
+    } else if (s.includes('tạm ngừng') || s.includes('chờ') || s.includes('chưa')) {
+      statusClass = 'status-warning';
+    }
 
     const pageTitle = `Mã số thuế ${d.taxId} - ${d.name} | Tra Cứu Doanh Nghiệp`;
     const metaDescription = `Tra cứu thông tin mã số thuế ${d.taxId} của ${d.name}. Đại diện: ${d.representative || 'N/A'}. Địa chỉ: ${d.address || d.taxAddress}. Tình trạng: ${statusText}.`;
@@ -102,7 +107,7 @@ export class SeoRenderer {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=3">
+  <link rel="stylesheet" href="/style.css?v=4">
 </head>
 <body class="light-theme">
   <!-- Toast Container -->
@@ -163,7 +168,10 @@ export class SeoRenderer {
     <div class="company-card" style="box-shadow: var(--shadow-lg); border-color: var(--border);">
       <div style="border-bottom: 1px solid var(--border); padding-bottom: 18px;">
         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
-          <span class="status-badge ${statusClass}">${this.escape(statusText)}</span>
+          <span class="status-badge ${statusClass}">
+            <span class="status-dot"></span>
+            <span>${this.escape(statusText)}</span>
+          </span>
           ${d.type ? `<span class="type-badge">${this.escape(d.type)}</span>` : ''}
         </div>
         <h1 class="ssr-company-title" style="font-size: 1.65rem; font-weight: 800; line-height: 1.3; color: var(--text-main);">
@@ -208,17 +216,19 @@ export class SeoRenderer {
 
       <!-- MST Highlight -->
       <div class="mst-highlight-card" style="margin-bottom: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
-          <div>
-            <div class="mst-label">MÃ SỐ THUẾ</div>
-            <div class="mst-value-row">
-              <span class="mst-code">${this.escape(d.taxId)}</span>
-              <button class="btn-copy-mst" onclick="copyMst('${this.escape(d.taxId)}')">
-                <span>Sao chép</span>
-              </button>
-            </div>
-          </div>
-          ${d.lastUpdated ? `<div class="mst-updated">${this.escape(d.lastUpdated)}</div>` : ''}
+        <div class="mst-card-header">
+          <span class="mst-label">MÃ SỐ THUẾ</span>
+          ${d.lastUpdated ? `<span class="mst-updated">Cập nhật: ${this.escape(d.lastUpdated)}</span>` : ''}
+        </div>
+        <div class="mst-value-row">
+          <span class="mst-code">${this.escape(d.taxId)}</span>
+          <button class="btn-copy-mst" onclick="copyMst('${this.escape(d.taxId)}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+              <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+            </svg>
+            <span>Sao chép</span>
+          </button>
         </div>
       </div>
 
@@ -245,7 +255,7 @@ export class SeoRenderer {
           <div class="card-icon">👤</div>
           <div class="card-content">
             <div class="card-label">Người đại diện pháp luật</div>
-            <div class="card-value font-highlight">${this.escape(d.representative || 'Chưa cập nhật')}</div>
+            <div class="card-value font-highlight">${d.representative ? this.escape(d.representative) : `<span class="val-empty">Chưa cập nhật</span>`}</div>
             ${d.representativeNote ? `
               <div class="rep-note">${this.escape(d.representativeNote)}</div>
             ` : ''}
@@ -257,7 +267,7 @@ export class SeoRenderer {
           <div class="card-icon">📞</div>
           <div class="card-content">
             <div class="card-label">Số điện thoại</div>
-            <div class="card-value font-mono">${this.escape(d.phone || 'Chưa cập nhật')}</div>
+            <div class="card-value">${d.phone ? `<span class="font-mono">${this.escape(d.phone)}</span>` : `<span class="val-empty">Chưa cập nhật</span>`}</div>
           </div>
         </div>
 
@@ -266,7 +276,7 @@ export class SeoRenderer {
           <div class="card-icon">📅</div>
           <div class="card-content">
             <div class="card-label">Ngày bắt đầu hoạt động</div>
-            <div class="card-value font-mono">${this.escape(d.startDate || 'Chưa cập nhật')}</div>
+            <div class="card-value">${d.startDate ? `<span class="font-mono">${this.escape(d.startDate)}</span>` : `<span class="val-empty">Chưa cập nhật</span>`}</div>
           </div>
         </div>
 
@@ -275,7 +285,7 @@ export class SeoRenderer {
           <div class="card-icon">🏛️</div>
           <div class="card-content">
             <div class="card-label">Cơ quan thuế quản lý</div>
-            <div class="card-value">${this.escape(d.managedBy || 'Chưa cập nhật')}</div>
+            <div class="card-value">${d.managedBy ? this.escape(d.managedBy) : `<span class="val-empty">Chưa cập nhật</span>`}</div>
           </div>
         </div>
 

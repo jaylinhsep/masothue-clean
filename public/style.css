@@ -754,10 +754,24 @@ button, input, select {
 }
 
 .status-badge {
-  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
   border-radius: var(--radius-full);
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .status-active {
@@ -765,11 +779,32 @@ button, input, select {
   color: var(--accent-green);
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
+.status-active .status-dot {
+  background: var(--accent-green);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+}
+
+.status-warning {
+  background: var(--accent-amber-bg);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+body.dark-theme .status-warning {
+  color: #fbbf24;
+}
+.status-warning .status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+}
 
 .status-danger {
   background: var(--accent-red-bg);
   color: var(--accent-red);
   border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.status-danger .status-dot {
+  background: var(--accent-red);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
 }
 
 .type-badge {
@@ -838,10 +873,21 @@ button, input, select {
 
 /* MST Card Highlight */
 .mst-highlight-card {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(79, 70, 229, 0.04));
-  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.06), rgba(79, 70, 229, 0.03));
+  border: 1px solid rgba(37, 99, 235, 0.18);
   border-radius: var(--radius-md);
-  padding: 18px 20px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mst-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .mst-label {
@@ -849,21 +895,29 @@ button, input, select {
   font-weight: 700;
   letter-spacing: 0.5px;
   color: var(--primary);
+  text-transform: uppercase;
+}
+
+.mst-updated {
+  font-size: 0.76rem;
+  color: var(--text-muted);
 }
 
 .mst-value-row {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-top: 4px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .mst-code {
   font-family: var(--font-mono);
-  font-size: 1.8rem;
+  font-size: 1.75rem;
   font-weight: 700;
   letter-spacing: 1px;
   color: var(--text-main);
+  line-height: 1.1;
+  word-break: break-all;
 }
 
 .btn-copy-mst {
@@ -872,22 +926,25 @@ button, input, select {
   border: none;
   padding: 6px 14px;
   border-radius: var(--radius-sm);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
 }
 
 .btn-copy-mst:hover {
   background: var(--primary-hover);
 }
 
-.mst-updated {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-top: 6px;
+.mst-status-bar {
+  display: flex;
+  align-items: center;
+  margin-top: 2px;
 }
 
 /* Detail Grid */
@@ -951,6 +1008,15 @@ button, input, select {
 
 .font-mono {
   font-family: var(--font-mono);
+}
+
+.val-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 0.88rem;
+  letter-spacing: normal;
 }
 
 .sub-address {
@@ -1540,25 +1606,59 @@ button, a, input, select {
   
   .btn-tool {
     flex-shrink: 0;
-    padding: 6px 10px;
-    font-size: 0.75rem;
+    padding: 6px 12px;
+    font-size: 0.78rem;
     white-space: nowrap;
     height: 34px;
   }
   
-  /* MST Card Highlight */
+  /* MST Card Highlight Mobile */
   .mst-highlight-card {
     padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .mst-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+
+  .mst-value-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
   }
   
   .mst-code {
-    font-size: 1.35rem;
+    font-size: 1.45rem;
     letter-spacing: 0.5px;
+    line-height: 1.1;
   }
   
   .btn-copy-mst {
-    padding: 5px 10px;
+    padding: 6px 12px;
     font-size: 0.78rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+    height: 34px;
+  }
+
+  .mst-status-bar {
+    width: 100%;
+    margin-top: 2px;
+  }
+
+  .status-badge {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    border-radius: var(--radius-sm);
   }
   
   .mst-updated {

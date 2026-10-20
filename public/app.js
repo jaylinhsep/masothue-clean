@@ -468,27 +468,52 @@ async function toggleCardAccordion(cardEl, item, forceExpand = false) {
   }
 }
 
+function getStatusBadge(rawStatus) {
+  const s = (rawStatus || '').toLowerCase().trim();
+  if (!s || s.includes('đang hoạt động')) {
+    return {
+      cssClass: 'status-active',
+      text: rawStatus || 'Đang hoạt động'
+    };
+  }
+  if (s.includes('tạm ngừng') || s.includes('chờ') || s.includes('chưa')) {
+    return {
+      cssClass: 'status-warning',
+      text: rawStatus
+    };
+  }
+  if (s.includes('không hoạt động') || s.includes('ngừng') || s.includes('đóng mã') || s.includes('giải thể') || s.includes('khoá') || s.includes('bỏ trốn') || s.includes('phá sản')) {
+    return {
+      cssClass: 'status-danger',
+      text: rawStatus
+    };
+  }
+  return {
+    cssClass: 'status-warning',
+    text: rawStatus
+  };
+}
+
 function renderAccordionContent(data, container, item) {
-  const isDanger = data.status.toLowerCase().includes('ngừng') || data.status.toLowerCase().includes('đóng mã');
-  const statusBadgeClass = isDanger ? 'status-danger' : 'status-active';
+  const statusInfo = getStatusBadge(data.status);
 
   const summaryText = [
     `TÊN CÔNG TY: ${data.name}`,
     `MÃ SỐ THUẾ: ${data.taxId}`,
     `TÌNH TRẠNG: ${data.status}`,
-    `ĐẠI DIỆN PHÁP LUẬT: ${data.representative}`,
-    `ĐIỆN THOẠI: ${data.phone || 'N/A'}`,
+    `ĐẠI DIỆN PHÁP LUẬT: ${data.representative || 'Chưa cập nhật'}`,
+    `ĐIỆN THOẠI: ${data.phone || 'Chưa cập nhật'}`,
     `ĐỊA CHỈ: ${data.address}`,
     data.taxAddress && data.taxAddress !== data.address ? `ĐỊA CHỈ THUẾ: ${data.taxAddress}` : null,
-    `NGÀY HOẠT ĐỘNG: ${data.startDate || 'N/A'}`,
-    `QUẢN LÝ BỞI: ${data.managedBy || 'N/A'}`,
-    `LOẠI HÌNH: ${data.type || 'N/A'}`,
-    `NGÀNH NGHỀ CHÍNH: ${data.mainIndustry || 'N/A'}`
+    `NGÀY HOẠT ĐỘNG: ${data.startDate || 'Chưa cập nhật'}`,
+    `QUẢN LÝ BỞI: ${data.managedBy || 'Chưa cập nhật'}`,
+    `LOẠI HÌNH: ${data.type || 'Chưa cập nhật'}`,
+    `NGÀNH NGHỀ CHÍNH: ${data.mainIndustry || 'Chưa cập nhật'}`
   ].filter(Boolean).join('\n');
 
   container.innerHTML = `
     <!-- Accordion Toolbar -->
-    <div class="modal-toolbar" style="border-radius: var(--radius-sm); margin-bottom: 16px;">
+    <div class="modal-toolbar" style="border-radius: var(--radius-sm); margin-bottom: 14px;">
       <button class="btn-tool" onclick="copyToClipboard(${escapeHtml(JSON.stringify(summaryText))}, 'Đã sao chép tóm tắt công ty')">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
@@ -528,20 +553,29 @@ function renderAccordionContent(data, container, item) {
 
     <!-- Key MST Box -->
     <div class="mst-highlight-card" style="margin-bottom: 16px;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div>
-          <div class="mst-label">MÃ SỐ THUẾ</div>
-          <div class="mst-value-row">
-            <span class="mst-code">${escapeHtml(data.taxId || 'Chưa cập nhật')}</span>
-            <button class="btn-copy-mst" onclick="copyToClipboard('${escapeHtml(data.taxId)}', 'Đã sao chép MST: ${escapeHtml(data.taxId)}')">
-              <span>Sao chép</span>
-            </button>
-          </div>
-        </div>
-        <div style="text-align: right;">
-          <span class="status-badge ${statusBadgeClass}">${escapeHtml(data.status || 'Đang hoạt động')}</span>
-          ${data.lastUpdated ? `<div class="mst-updated" style="margin-top: 6px;">${escapeHtml(data.lastUpdated)}</div>` : ''}
-        </div>
+      <div class="mst-card-header">
+        <span class="mst-label">MÃ SỐ THUẾ</span>
+        ${data.lastUpdated ? `<span class="mst-updated">Cập nhật: ${escapeHtml(data.lastUpdated)}</span>` : ''}
+      </div>
+
+      <div class="mst-value-row">
+        <span class="mst-code">${escapeHtml(data.taxId || 'Chưa cập nhật')}</span>
+        ${data.taxId ? `
+          <button class="btn-copy-mst" onclick="copyToClipboard('${escapeHtml(data.taxId)}', 'Đã sao chép MST: ${escapeHtml(data.taxId)}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+              <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+            </svg>
+            <span>Sao chép</span>
+          </button>
+        ` : ''}
+      </div>
+
+      <div class="mst-status-bar">
+        <span class="status-badge ${statusInfo.cssClass}">
+          <span class="status-dot"></span>
+          <span>${escapeHtml(statusInfo.text)}</span>
+        </span>
       </div>
     </div>
 
@@ -568,7 +602,7 @@ function renderAccordionContent(data, container, item) {
         <div class="card-icon">👤</div>
         <div class="card-content">
           <div class="card-label">Người đại diện pháp luật</div>
-          <div class="card-value font-highlight">${escapeHtml(data.representative || 'Chưa cập nhật')}</div>
+          <div class="card-value font-highlight">${data.representative ? escapeHtml(data.representative) : `<span class="val-empty">Chưa cập nhật</span>`}</div>
           ${data.representativeNote ? `
             <div class="rep-note">${escapeHtml(data.representativeNote)}</div>
           ` : ''}
@@ -580,7 +614,7 @@ function renderAccordionContent(data, container, item) {
         <div class="card-icon">📞</div>
         <div class="card-content">
           <div class="card-label">Số điện thoại</div>
-          <div class="card-value font-mono">${escapeHtml(data.phone || 'Chưa cập nhật')}</div>
+          <div class="card-value">${data.phone ? `<span class="font-mono">${escapeHtml(data.phone)}</span>` : `<span class="val-empty">Chưa cập nhật</span>`}</div>
         </div>
       </div>
 
@@ -589,7 +623,7 @@ function renderAccordionContent(data, container, item) {
         <div class="card-icon">📅</div>
         <div class="card-content">
           <div class="card-label">Ngày bắt đầu hoạt động</div>
-          <div class="card-value font-mono">${escapeHtml(data.startDate || 'Chưa cập nhật')}</div>
+          <div class="card-value">${data.startDate ? `<span class="font-mono">${escapeHtml(data.startDate)}</span>` : `<span class="val-empty">Chưa cập nhật</span>`}</div>
         </div>
       </div>
 
@@ -598,7 +632,7 @@ function renderAccordionContent(data, container, item) {
         <div class="card-icon">🏛️</div>
         <div class="card-content">
           <div class="card-label">Cơ quan thuế quản lý</div>
-          <div class="card-value">${escapeHtml(data.managedBy || 'Chưa cập nhật')}</div>
+          <div class="card-value">${data.managedBy ? escapeHtml(data.managedBy) : `<span class="val-empty">Chưa cập nhật</span>`}</div>
         </div>
       </div>
 
@@ -621,7 +655,7 @@ function renderAccordionContent(data, container, item) {
         <div class="card-icon">📑</div>
         <div class="card-content">
           <div class="card-label">Loại hình doanh nghiệp</div>
-          <div class="card-value">${escapeHtml(data.type || 'Chưa cập nhật')}</div>
+          <div class="card-value">${data.type ? escapeHtml(data.type) : `<span class="val-empty">Chưa cập nhật</span>`}</div>
         </div>
       </div>
 
@@ -630,7 +664,7 @@ function renderAccordionContent(data, container, item) {
         <div class="card-icon">⭐</div>
         <div class="card-content">
           <div class="card-label">Ngành nghề kinh doanh chính</div>
-          <div class="card-value font-highlight">${escapeHtml(data.mainIndustry || 'Chưa có thông tin ngành chính')}</div>
+          <div class="card-value font-highlight">${data.mainIndustry ? escapeHtml(data.mainIndustry) : `<span class="val-empty">Chưa có thông tin ngành chính</span>`}</div>
         </div>
       </div>
     </div>
@@ -743,9 +777,9 @@ function openDetailModal(data) {
   state.activeDetail = data;
 
   // Status
-  const isDanger = data.status.toLowerCase().includes('ngừng') || data.status.toLowerCase().includes('đóng mã');
-  el.detailStatusBadge.textContent = data.status || 'Đang hoạt động';
-  el.detailStatusBadge.className = `status-badge ${isDanger ? 'status-danger' : 'status-active'}`;
+  const statusInfo = getStatusBadge(data.status);
+  el.detailStatusBadge.className = `status-badge ${statusInfo.cssClass}`;
+  el.detailStatusBadge.innerHTML = `<span class="status-dot"></span><span>${escapeHtml(statusInfo.text)}</span>`;
 
   // Name & Titles
   el.detailName.textContent = data.name;
@@ -760,7 +794,7 @@ function openDetailModal(data) {
 
   // Tax ID & Highlight
   el.detailTaxId.textContent = data.taxId || 'Chưa cập nhật';
-  el.detailLastUpdated.textContent = data.lastUpdated || '';
+  el.detailLastUpdated.textContent = data.lastUpdated ? `Cập nhật: ${data.lastUpdated}` : '';
 
   // Address
   el.detailAddress.textContent = data.address || '-';
@@ -772,7 +806,7 @@ function openDetailModal(data) {
   }
 
   // Representative
-  el.detailRepresentative.textContent = data.representative || 'Chưa cập nhật';
+  el.detailRepresentative.innerHTML = data.representative ? escapeHtml(data.representative) : `<span class="val-empty">Chưa cập nhật</span>`;
   if (data.representativeNote) {
     el.detailRepNote.classList.remove('hidden');
     el.detailRepNote.textContent = data.representativeNote;
@@ -781,11 +815,11 @@ function openDetailModal(data) {
   }
 
   // Phone, Date, Managed By, Type
-  el.detailPhone.textContent = data.phone || 'Chưa cập nhật';
-  el.detailStartDate.textContent = data.startDate || 'Chưa cập nhật';
-  el.detailManagedBy.textContent = data.managedBy || 'Chưa cập nhật';
-  el.detailType.textContent = data.type || 'Chưa cập nhật';
-  el.detailMainIndustry.textContent = data.mainIndustry || 'Chưa có thông tin';
+  el.detailPhone.innerHTML = data.phone ? `<span class="font-mono">${escapeHtml(data.phone)}</span>` : `<span class="val-empty">Chưa cập nhật</span>`;
+  el.detailStartDate.innerHTML = data.startDate ? `<span class="font-mono">${escapeHtml(data.startDate)}</span>` : `<span class="val-empty">Chưa cập nhật</span>`;
+  el.detailManagedBy.innerHTML = data.managedBy ? escapeHtml(data.managedBy) : `<span class="val-empty">Chưa cập nhật</span>`;
+  el.detailType.innerHTML = data.type ? escapeHtml(data.type) : `<span class="val-empty">Chưa cập nhật</span>`;
+  el.detailMainIndustry.innerHTML = data.mainIndustry ? escapeHtml(data.mainIndustry) : `<span class="val-empty">Chưa có thông tin</span>`;
 
   // Industries table
   if (data.industries && data.industries.length > 0) {
