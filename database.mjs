@@ -217,16 +217,48 @@ export class Database {
   async saveCompany(company) {
     if (!company || !company.taxId || !company.name || !this.client) return false;
 
-    let cleanSlug = company.url ? company.url.replace(/^\//, '') : '';
+    // Clean slug: remove any leading slash and never store 'mst/'
+    let cleanSlug = company.url ? company.url.replace(/^\/?(mst\/)?/, '') : '';
     if (!cleanSlug) {
       cleanSlug = `${company.taxId}-${this.slugify(company.name)}`;
     }
 
-    const province = this.extractProvince(company.address || company.taxAddress);
-    const mainIndustry = this.detectIndustry(company.name, company.mainIndustry);
+    // Fetch existing company from DB to preserve enriched details (never overwrite good data with blank strings!)
+    let existingData = {};
+    let existingRep = '';
+    let existingPhone = '';
+    let existingAddr = '';
+    try {
+      const existing = await this.client.execute({
+        sql: 'SELECT representative, phone, address, data FROM companies WHERE taxId = ? LIMIT 1',
+        args: [company.taxId]
+      });
+      if (existing.rows && existing.rows.length > 0) {
+        existingRep = existing.rows[0].representative || '';
+        existingPhone = existing.rows[0].phone || '';
+        existingAddr = existing.rows[0].address || '';
+        try {
+          existingData = typeof existing.rows[0].data === 'string' ? JSON.parse(existing.rows[0].data) : (existing.rows[0].data || {});
+        } catch (e) {}
+      }
+    } catch (e) {}
+
+    const finalRep = (company.representative && company.representative.trim()) || existingRep || existingData.representative || '';
+    const finalPhone = (company.phone && company.phone.trim()) || existingPhone || existingData.phone || '';
+    const finalStartDate = (company.startDate && company.startDate.trim()) || existingData.startDate || '';
+    const finalManagedBy = (company.managedBy && company.managedBy.trim() && company.managedBy !== 'Cơ quan Thuế') 
+      ? company.managedBy 
+      : (existingData.managedBy || company.managedBy || 'Cơ quan Thuế');
+
+    const address = company.address || company.taxAddress || existingAddr || existingData.address || '';
+    const province = this.extractProvince(address);
+    const mainIndustry = this.detectIndustry(company.name, company.mainIndustry || existingData.mainIndustry);
     
     // Auto-populate industries list if empty
-    let industries = Array.isArray(company.industries) && company.industries.length > 0 ? company.industries : [];
+    let industries = Array.isArray(company.industries) && company.industries.length > 0 
+      ? company.industries 
+      : (existingData.industries && existingData.industries.length > 0 ? existingData.industries : []);
+      
     if (industries.length === 0 && mainIndustry) {
       const codeMatch = mainIndustry.match(/Mã:\s*(\d+)/);
       const code = codeMatch ? codeMatch[1] : '4690';
@@ -235,7 +267,14 @@ export class Database {
     }
 
     const payload = {
+      ...existingData,
       ...company,
+      url: `/mst/${cleanSlug}`,
+      representative: finalRep,
+      phone: finalPhone,
+      startDate: finalStartDate,
+      managedBy: finalManagedBy,
+      address,
       mainIndustry,
       industries
     };
@@ -264,12 +303,12 @@ export class Database {
           company.taxId,
           company.name,
           cleanSlug,
-          company.representative || '',
-          company.address || company.taxAddress || '',
-          company.status || 'Đang hoạt động',
+          finalRep,
+          address,
+          company.status || existingData.status || 'Đang hoạt động',
           province,
-          company.type || '',
-          company.phone || '',
+          company.type || existingData.type || '',
+          finalPhone,
           mainIndustry,
           JSON.stringify(payload),
           now,
@@ -303,12 +342,12 @@ export class Database {
 
   async getCompanyBySlug(slug) {
     if (!slug || !this.client) return null;
-    const clean = slug.replace(/^\//, '');
+    const clean = slug.replace(/^\/?(mst\/)?/, '');
     try {
-      // 1. Try exact slug
+      // 1. Try exact clean slug or with mst/
       const res = await this.client.execute({
-        sql: 'SELECT * FROM companies WHERE slug = ? LIMIT 1',
-        args: [clean]
+        sql: 'SELECT * FROM companies WHERE slug = ? OR slug = ? LIMIT 1',
+        args: [clean, `mst/${clean}`]
       });
       if (res.rows && res.rows.length > 0) {
         const row = { ...res.rows[0] };
@@ -316,8 +355,8 @@ export class Database {
         return row;
       }
 
-      // 2. If slug starts with taxId, e.g. "0100109106"
-      const taxMatch = clean.match(/^(\d{10}(-\d{3})?)/);
+      // 2. If slug contains taxId, e.g. "0100109106" or "0100109106-tap-doan..."
+      const taxMatch = clean.match(/(\d{10}(-\d{3})?)/);
       if (taxMatch) {
         return await this.getCompanyByTaxId(taxMatch[1]);
       }

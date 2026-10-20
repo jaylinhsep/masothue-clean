@@ -22,12 +22,13 @@ async function main() {
   await db.init();
   console.log(`[DB] Đang kết nối tới: ${db.isTurso ? '☁️ Turso Cloud 5GB' : '💻 Local SQLite'}`);
 
-  // Query companies that are missing phone, startDate, or managedBy
+  // Query companies that are missing representative, phone, startDate, or specific tax office
   const res = await db.client.execute(`
     SELECT taxId, name, slug FROM companies 
-    WHERE phone IS NULL OR phone = '' 
-       OR data NOT LIKE '%startDate%'
-       OR data NOT LIKE '%managedBy%'
+    WHERE (representative IS NULL OR representative = '')
+       OR (phone IS NULL OR phone = '')
+       OR (data NOT LIKE '%startDate%')
+       OR (data NOT LIKE '%managedBy%' OR data LIKE '%"managedBy":"Cơ quan Thuế"%')
     ORDER BY updatedAt ASC
   `);
 
@@ -45,21 +46,21 @@ async function main() {
 
   for (let i = 0; i < pending.length; i++) {
     const item = pending[i];
-    const path = item.slug ? `/${item.slug}` : `/${item.taxId}`;
+    const cleanSlug = (item.slug || '').replace(/^\/?(mst\/)?/, '');
+    const path = cleanSlug ? `/${cleanSlug}` : `/${item.taxId}`;
     const progress = `[${i + 1}/${pending.length}]`;
 
     process.stdout.write(`${progress} Đang nạp: ${item.name.slice(0, 40)} (MST: ${item.taxId})... `);
 
     try {
-      const detail = await crawler.getDetail(path);
-      if (detail.success && detail.data) {
+      // Use forceFresh = true to fetch rich metadata directly from source
+      const detail = await crawler.getDetail(path, true);
+      if (detail.success && detail.data && (detail.data.representative || detail.data.managedBy)) {
         // Save enriched company to Turso Cloud
         await db.saveCompany(detail.data);
         updatedCount++;
         console.log(`✓ XONG!`);
-        if (detail.data.representative || detail.data.managedBy) {
-          console.log(`       -> Đại diện: ${detail.data.representative || 'N/A'} | Ngày HĐ: ${detail.data.startDate || 'N/A'} | Thuế: ${detail.data.managedBy || 'N/A'}`);
-        }
+        console.log(`       -> Đại diện: ${detail.data.representative || 'N/A'} | SĐT: ${detail.data.phone || 'N/A'} | Thuế: ${detail.data.managedBy || 'N/A'}`);
       } else {
         failCount++;
         console.log(`⚠️ Không tìm thấy trang chi tiết.`);

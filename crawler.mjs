@@ -305,29 +305,74 @@ export class MasothueCrawler {
       return { success: false, message: 'Vui lòng nhập từ khóa tìm kiếm (Tên công ty, MST, người đại diện)' };
     }
 
-    // 1. Direct Tax Code check via VietQR API (Lightning-fast, cloud-friendly, zero captcha)
+    // 1. Direct Tax Code check
     const isPureDigits = /^\d{10}(-\d{3})?$/.test(q);
     if (isPureDigits) {
-      const vCompany = await this.getFromVietQR(q);
-      if (vCompany) {
-        await db.saveCompany(vCompany);
+      // Priority 1: Check Turso Cloud DB first! Instant (<30ms) & has full enriched metadata
+      const dbCompany = await db.getCompanyByTaxId(q);
+      if (dbCompany && dbCompany.data) {
+        const cleanSlug = (dbCompany.slug || '').replace(/^\/?(mst\/)?/, '');
+        const targetUrl = `/${cleanSlug}`;
         return {
           success: true,
           isDirect: true,
-          directUrl: vCompany.url,
+          fromDb: true,
+          directUrl: targetUrl,
+          detail: dbCompany.data,
+          items: [{
+            name: dbCompany.name,
+            url: targetUrl,
+            taxId: dbCompany.taxId,
+            representative: dbCompany.representative || dbCompany.data.representative || '',
+            address: dbCompany.address,
+            status: dbCompany.status,
+            province: dbCompany.province,
+            autoExpand: true
+          }],
+          currentPage: 1,
+          maxPage: 1,
+          totalFound: 1
+        };
+      }
+
+      // Priority 2: If not in DB, try VietQR API
+      const vCompany = await this.getFromVietQR(q);
+      if (vCompany) {
+        await db.saveCompany(vCompany);
+        const cleanSlug = (vCompany.url || '').replace(/^\/?(mst\/)?/, '');
+        const targetUrl = `/${cleanSlug}`;
+        return {
+          success: true,
+          isDirect: true,
+          directUrl: targetUrl,
           detail: vCompany,
           items: [{
             name: vCompany.name,
-            url: vCompany.url,
+            url: targetUrl,
             taxId: vCompany.taxId,
             representative: vCompany.representative,
             address: vCompany.address,
             autoExpand: true
           }],
           currentPage: 1,
-          maxPage: 1
+          maxPage: 1,
+          totalFound: 1
         };
       }
+    }
+
+    // 2. Search in Indexed Database (Turso Cloud / SQLite) - Super fast!
+    const dbItems = await db.searchCompanies(q, 20);
+    if (dbItems && dbItems.length > 0) {
+      return {
+        success: true,
+        isDirect: dbItems.length === 1,
+        fromDb: true,
+        items: dbItems,
+        currentPage: 1,
+        maxPage: 1,
+        totalFound: dbItems.length
+      };
     }
 
     // Smart query normalization:
@@ -343,7 +388,7 @@ export class MasothueCrawler {
       return { ...cached, fromCache: true };
     }
 
-    // 2. Search Masothue using stealth gotScraping (Bypasses Cloudflare JA3 TLS checks)
+    // 3. Search Masothue using stealth gotScraping (Bypasses Cloudflare JA3 TLS checks)
     let token = await this.ensureSession();
 
     let ajaxData = null;
@@ -487,21 +532,7 @@ export class MasothueCrawler {
       }
     }
 
-    // --- FALLBACK 1: Search in Indexed Database (Turso Cloud / SQLite) ---
-    const dbItems = await db.searchCompanies(q, 20);
-    if (dbItems && dbItems.length > 0) {
-      return {
-        success: true,
-        isDirect: false,
-        fromDb: true,
-        items: dbItems,
-        currentPage: 1,
-        maxPage: 1,
-        totalFound: dbItems.length
-      };
-    }
-
-    // --- FALLBACK 2: Real-time Google Custom Search API ---
+    // --- FALLBACK 1: Real-time Google Custom Search API ---
     const googleResult = await this.searchViaGoogle(effectiveQ);
     if (googleResult && googleResult.items && googleResult.items.length > 0) {
       this.setCache(cacheKey, googleResult);
@@ -546,27 +577,29 @@ export class MasothueCrawler {
     };
   }
 
-  async getDetail(path) {
+  async getDetail(path, forceFresh = false) {
     const cleanPath = path.startsWith('/') ? path : '/' + path;
     const cacheKey = `detail:${cleanPath}`;
     const cached = this.getCache(cacheKey);
-    if (cached) {
+    if (cached && !forceFresh) {
       return { success: true, data: cached, fromCache: true };
     }
 
-    const taxMatch = cleanPath.match(/\/(\d{10}(-\d{3})?)/);
+    const taxMatch = cleanPath.match(/(\d{10}(-\d{3})?)/);
     let existingInDb = null;
     if (taxMatch) {
-      existingInDb = await db.getCompanyByTaxId(taxMatch[1]);
-      if (existingInDb && existingInDb.data) {
-        // If it already has full industry list (>1 item) and full metadata, serve instantly from DB!
-        if (existingInDb.data.industries && existingInDb.data.industries.length > 1 && existingInDb.data.managedBy) {
+      existingInDb = (await db.getCompanyByTaxId(taxMatch[1])) || (await db.getCompanyBySlug(cleanPath));
+      if (!forceFresh && existingInDb && existingInDb.data) {
+        // If it already has representative or phone or specific tax office, serve instantly from DB!
+        if (existingInDb.representative || existingInDb.data.representative || existingInDb.data.phone || (existingInDb.data.managedBy && existingInDb.data.managedBy !== 'Cơ quan Thuế')) {
           return { success: true, data: existingInDb.data, fromDb: true };
         }
       }
     }
 
-    const url = this.baseUrl + cleanPath;
+    // Always strip '/mst/' when requesting masothue.com
+    const rawMasothuePath = cleanPath.replace(/^\/?(mst\/)?/, '/');
+    const url = this.baseUrl + rawMasothuePath;
 
     try {
       const res = await gotScraping({
@@ -594,6 +627,9 @@ export class MasothueCrawler {
 
       const name = $('table.table-taxinfo thead th[itemprop="name"]').text().trim() || $('h1').first().text().trim();
       if (!name) {
+        if (existingInDb && existingInDb.data) {
+          return { success: true, data: existingInDb.data, fromDb: true };
+        }
         if (taxMatch) {
           const vCompany = await this.getFromVietQR(taxMatch[1]);
           if (vCompany) {
@@ -682,6 +718,9 @@ export class MasothueCrawler {
       return { success: true, data: info };
     } catch (err) {
       console.warn('[Crawler] getDetail error:', err.message);
+      if (existingInDb && existingInDb.data) {
+        return { success: true, data: existingInDb.data, fromDb: true };
+      }
       if (taxMatch) {
         const vCompany = await this.getFromVietQR(taxMatch[1]);
         if (vCompany) {
