@@ -141,7 +141,7 @@ async function loadRecentCompanies() {
           </div>
           <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
             <a href="/mst/${escapeHtml(item.slug)}" class="btn-card-detail" style="text-decoration: none; padding: 4px 10px; font-size: 0.78rem;">
-              Xem trang SEO →
+              Xem chi tiết →
             </a>
             <button class="btn-copy-small" onclick="copyToClipboard('${escapeHtml(item.taxId)}', 'Đã sao chép MST')">Copy MST</button>
           </div>

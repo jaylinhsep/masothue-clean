@@ -576,7 +576,7 @@ let port = parseInt(process.env.PORT, 10) || 3000;
 function startServer(p) {
   const server = app.listen(p, () => {
     console.log(`\n======================================================`);
-    console.log(`  Ứng dụng Tra Cứu Mã Số Thuế Chuẩn SEO (Zero-Ads)`);
+    console.log(`  Ứng dụng Tra Cứu Mã Số Thuế (Zero-Ads)`);
     console.log(`  Chế độ Database: ${db.isTurso ? '☁️ Turso Cloud (5GB Miễn Phí)' : '💻 SQLite Cục Bộ'}`);
     console.log(`  Trang chủ:      http://localhost:${p}`);
     console.log(`  Sitemap XML:    http://localhost:${p}/sitemap.xml`);

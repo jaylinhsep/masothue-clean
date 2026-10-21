@@ -54,7 +54,7 @@ export class SeoRenderer {
           </div>
           <div>
             <span class="brand-title">Mã Số Thuế <span class="clean-badge">Bản Sạch</span></span>
-            <span class="brand-subtitle">Tra cứu thông tin công ty • Tốc độ cao • Chuẩn SEO</span>
+            <span class="brand-subtitle">Tra cứu thông tin công ty • Không quảng cáo • Tốc độ cao</span>
           </div>
         </a>
 
@@ -99,7 +99,7 @@ export class SeoRenderer {
         <p style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">
           Tra Cứu Mã Số Thuế Sạch • Dữ liệu công khai từ Cổng thông tin Doanh nghiệp & Tổng cục Thuế
         </p>
-        <p class="footer-sub">Hệ thống tối ưu SEO, không quảng cáo, tốc độ tải dưới 0.3s.</p>
+        <p class="footer-sub">Không quảng cáo, tốc độ tải dưới 0.3s.</p>
       </div>
     </footer>`;
   }
@@ -155,7 +155,7 @@ export class SeoRenderer {
     }
 
     const title = `Danh Bạ Doanh Nghiệp 63 Tỉnh Thành Việt Nam | Tra Cứu Mã Số Thuế`;
-    const description = `Danh bạ tra cứu mã số thuế doanh nghiệp theo 63 tỉnh thành phố Việt Nam: TP Hồ Chí Minh, Hà Nội, Đà Nẵng, Bình Dương, Đồng Nai... Cập nhật mới nhất, chuẩn SEO, không quảng cáo.`;
+    const description = `Danh bạ tra cứu mã số thuế doanh nghiệp theo 63 tỉnh thành phố Việt Nam: TP Hồ Chí Minh, Hà Nội, Đà Nẵng, Bình Dương, Đồng Nai... Cập nhật mới nhất, không quảng cáo.`;
 
     const jsonLd = {
       "@context": "https://schema.org",
