@@ -144,7 +144,7 @@ export class SeoRenderer {
   }
 
   // ==========================================
-  // 1. HUB: DANH BẠ 63 TỈNH THÀNH (INDEX)
+  // 1. HUB: DANH BẠ 34 TỈNH THÀNH MỚI (INDEX)
   // ==========================================
   renderProvincesIndexPage(provincesWithCounts = [], host = 'localhost:3000') {
     const domain = `https://${host}`;
@@ -154,8 +154,8 @@ export class SeoRenderer {
       countMap[item.province] = item.count;
     }
 
-    const title = `Danh Bạ Doanh Nghiệp 63 Tỉnh Thành Việt Nam | Tra Cứu Mã Số Thuế`;
-    const description = `Danh bạ tra cứu mã số thuế doanh nghiệp theo 63 tỉnh thành phố Việt Nam: TP Hồ Chí Minh, Hà Nội, Đà Nẵng, Bình Dương, Đồng Nai... Cập nhật mới nhất, không quảng cáo.`;
+    const title = `Danh Bạ Doanh Nghiệp 34 Tỉnh Thành Việt Nam (Mới Nhất 2026) | Tra Cứu Mã Số Thuế`;
+    const description = `Danh bạ tra cứu mã số thuế doanh nghiệp theo 34 tỉnh thành phố mới nhất của Việt Nam (Nghị quyết 202/2025/QH15): TP Hồ Chí Minh, Hà Nội, Hải Phòng, Đà Nẵng, Cần Thơ, Huế... Cập nhật mới nhất, không quảng cáo.`;
 
     const jsonLd = {
       "@context": "https://schema.org",
@@ -171,7 +171,7 @@ export class SeoRenderer {
           "@type": "BreadcrumbList",
           "itemListElement": [
             { "@type": "ListItem", "position": 1, "name": "Trang chủ", "item": domain },
-            { "@type": "ListItem", "position": 2, "name": "Danh bạ tỉnh thành", "item": pageUrl }
+            { "@type": "ListItem", "position": 2, "name": "Danh bạ 34 tỉnh thành", "item": pageUrl }
           ]
         }
       ]
@@ -199,16 +199,16 @@ export class SeoRenderer {
       <ol class="ssr-breadcrumb-list">
         <li class="ssr-breadcrumb-item"><a href="/" class="ssr-breadcrumb-link">Trang chủ</a></li>
         <li class="ssr-breadcrumb-sep">/</li>
-        <li class="ssr-breadcrumb-item ssr-breadcrumb-item--current" aria-current="page">Danh bạ tỉnh thành</li>
+        <li class="ssr-breadcrumb-item ssr-breadcrumb-item--current" aria-current="page">Danh bạ 34 tỉnh thành</li>
       </ol>
     </nav>
 
     <div class="hub-hero">
-      <h1 class="hub-title">Danh Bạ Doanh Nghiệp 63 Tỉnh Thành</h1>
-      <p class="hub-desc">Tra cứu thông tin công ty, người đại diện và mã số thuế phân loại theo địa phương trên toàn quốc.</p>
+      <h1 class="hub-title">Danh Bạ Doanh Nghiệp 34 Tỉnh Thành Mới</h1>
+      <p class="hub-desc">Tra cứu thông tin công ty, người đại diện và mã số thuế phân loại theo 34 đơn vị hành chính cấp tỉnh mới nhất (Nghị quyết số 202/2025/QH15 của Quốc hội).</p>
       
       <div class="hub-search-box">
-        <input type="text" id="filter-province-input" class="hub-filter-input" placeholder="🔍 Gõ tên tỉnh thành để lọc nhanh (Hà Nội, Sài Gòn, Đà Nẵng...)" oninput="filterProvinces(this.value)">
+        <input type="text" id="filter-province-input" class="hub-filter-input" placeholder="🔍 Gõ tên tỉnh thành để lọc nhanh (Hà Nội, Sài Gòn, Hải Phòng, Đà Nẵng...)" oninput="filterProvinces(this.value)">
       </div>
     </div>
 
@@ -221,26 +221,30 @@ export class SeoRenderer {
           return `
             <a href="/tinh-thanh/${p.slug}" class="province-card hot-card">
               <div class="prov-card-header">
-                <span class="prov-icon">🏢</span>
+                <span class="prov-icon">${p.isCity ? '🏛️' : '🏢'}</span>
                 <span class="prov-badge">${c > 0 ? `${c} công ty` : 'Tra cứu'}</span>
               </div>
               <h3 class="prov-name">${this.escape(p.name)}</h3>
               <p class="prov-sub">${p.region} • Tra cứu mã số thuế</p>
+              ${p.mergedFrom ? `<p class="prov-merged" style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; line-height:1.3;">📌 ${this.escape(p.mergedFrom)}</p>` : ''}
             </a>
           `;
         }).join('')}
       </div>
     </section>
 
-    <!-- All 63 Provinces grouped by Region -->
+    <!-- All 34 Provinces -->
     <section class="hub-section">
-      <h2 class="hub-section-title">📍 Tất cả các tỉnh thành trên toàn quốc (63 tỉnh thành)</h2>
+      <h2 class="hub-section-title">📍 Tất cả các tỉnh thành trên toàn quốc (34 đơn vị cấp tỉnh mới)</h2>
       <div class="province-all-grid" id="all-provinces-container">
         ${VIETNAM_PROVINCES.map(p => {
           const c = countMap[p.name] || 0;
           return `
-            <a href="/tinh-thanh/${p.slug}" class="province-item-link" data-name="${p.name.toLowerCase()}">
-              <span class="prov-item-name">${this.escape(p.name)}</span>
+            <a href="/tinh-thanh/${p.slug}" class="province-item-link" data-name="${(p.name + ' ' + (p.oldNames || []).join(' ')).toLowerCase()}">
+              <div>
+                <span class="prov-item-name">${this.escape(p.name)}</span>
+                ${p.mergedFrom && p.mergedFrom.startsWith('Gồm') ? `<span style="display:block; font-size:0.75rem; color:var(--text-muted); font-weight:normal;">${this.escape(p.mergedFrom)}</span>` : ''}
+              </div>
               <span class="prov-item-count">${c > 0 ? c : ''}</span>
             </a>
           `;
@@ -337,6 +341,7 @@ export class SeoRenderer {
     <div class="hub-hero">
       <h1 class="hub-title">Doanh Nghiệp Tại ${this.escape(provinceInfo.name)}</h1>
       <p class="hub-desc">Tổng cộng <strong>${data.total}</strong> doanh nghiệp đang hoạt động trên hệ thống dữ liệu tại ${this.escape(provinceInfo.name)}.</p>
+      ${provinceInfo.mergedFrom ? `<p class="hub-sub" style="font-size:0.92rem; color:var(--text-muted); margin-top:6px;">📋 <em>${this.escape(provinceInfo.mergedFrom)} (Nghị quyết 202/2025/QH15)</em></p>` : ''}
     </div>
 
     <!-- Company Grid -->

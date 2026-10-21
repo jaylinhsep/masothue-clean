@@ -121,7 +121,7 @@ app.get('/sitemap.xml', async (req, res) => {
 // 2B. SEO SILO & HUB DIRECTORY ROUTES
 // ==========================================
 
-// Hub 1: Danh bạ 63 Tỉnh Thành
+// Hub 1: Danh bạ 34 Tỉnh Thành Mới (Nghị quyết 202/2025/QH15)
 app.get('/tinh-thanh', async (req, res) => {
   try {
     const cacheKey = 'hub:provinces:index';
@@ -142,8 +142,15 @@ app.get('/tinh-thanh', async (req, res) => {
 app.get('/tinh-thanh/:slug', async (req, res) => {
   try {
     const slug = req.params.slug;
-    const prov = VIETNAM_PROVINCES.find(p => p.slug === slug);
-    if (!prov) return res.redirect('/tinh-thanh');
+    let prov = VIETNAM_PROVINCES.find(p => p.slug === slug);
+    if (!prov) {
+      // Check if it's an old merged province slug -> 301 redirect to new unit
+      const mergedProv = VIETNAM_PROVINCES.find(p => p.oldSlugs && p.oldSlugs.includes(slug));
+      if (mergedProv) {
+        return res.redirect(301, `/tinh-thanh/${mergedProv.slug}`);
+      }
+      return res.redirect('/tinh-thanh');
+    }
 
     const page = parseInt(req.query.page, 10) || 1;
     const cacheKey = `hub:province:${slug}:${page}`;

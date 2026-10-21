@@ -91,18 +91,101 @@ export class Database {
   extractProvince(address) {
     if (!address) return 'Toàn Quốc';
     const clean = address.toLowerCase();
+
+    // 1. TP Hồ Chí Minh (TP.HCM + Bình Dương + Bà Rịa - Vũng Tàu)
+    if (clean.includes('hồ chí minh') || clean.includes('tp.hcm') || clean.includes('tp hcm') || clean.includes('sài gòn') || clean.includes('tphcm') || clean.includes('bình dương') || clean.includes('bà rịa') || clean.includes('vũng tàu')) return 'TP Hồ Chí Minh';
+
+    // 2. Hà Nội
     if (clean.includes('hà nội') || clean.includes('ha noi')) return 'Hà Nội';
-    if (clean.includes('hồ chí minh') || clean.includes('tp.hcm') || clean.includes('tp hcm') || clean.includes('sài gòn') || clean.includes('tphcm')) return 'TP Hồ Chí Minh';
-    if (clean.includes('đà nẵng') || clean.includes('da nang')) return 'Đà Nẵng';
-    if (clean.includes('hải phòng') || clean.includes('hai phong')) return 'Hải Phòng';
-    if (clean.includes('cần thơ') || clean.includes('can tho')) return 'Cần Thơ';
-    if (clean.includes('bình dương') || clean.includes('binh duong')) return 'Bình Dương';
-    if (clean.includes('đồng nai') || clean.includes('dong nai')) return 'Đồng Nai';
-    if (clean.includes('bà rịa') || clean.includes('vũng tàu')) return 'Bà Rịa - Vũng Tàu';
-    
-    // Check against all other 63 provinces
+
+    // 3. Hải Phòng (Hải Phòng + Hải Dương)
+    if (clean.includes('hải phòng') || clean.includes('hải dương')) return 'Hải Phòng';
+
+    // 4. Đà Nẵng (Đà Nẵng + Quảng Nam)
+    if (clean.includes('đà nẵng') || clean.includes('quảng nam')) return 'Đà Nẵng';
+
+    // 5. Cần Thơ (Cần Thơ + Hậu Giang + Sóc Trăng)
+    if (clean.includes('cần thơ') || clean.includes('hậu giang') || clean.includes('sóc trăng')) return 'Cần Thơ';
+
+    // 6. Huế (Thừa Thiên Huế)
+    if (clean.includes('thừa thiên') || clean.includes('huế')) return 'Huế';
+
+    // 7. Bắc Ninh (Bắc Ninh + Bắc Giang)
+    if (clean.includes('bắc ninh') || clean.includes('bắc giang')) return 'Bắc Ninh';
+
+    // 8. Thái Nguyên (Thái Nguyên + Bắc Kạn)
+    if (clean.includes('thái nguyên') || clean.includes('bắc kạn') || clean.includes('bắc cạn')) return 'Thái Nguyên';
+
+    // 9. Phú Thọ (Phú Thọ + Vĩnh Phúc + Hòa Bình)
+    if (clean.includes('phú thọ') || clean.includes('vĩnh phúc') || clean.includes('hòa bình')) return 'Phú Thọ';
+
+    // 10. Hưng Yên (Hưng Yên + Thái Bình)
+    if (clean.includes('hưng yên') || clean.includes('thái bình')) return 'Hưng Yên';
+
+    // 11. Ninh Bình (Ninh Bình + Nam Định + Hà Nam)
+    if (clean.includes('ninh bình') || clean.includes('nam định') || clean.includes('hà nam')) return 'Ninh Bình';
+
+    // 12. Tuyên Quang (Tuyên Quang + Hà Giang)
+    if (clean.includes('tuyên quang') || clean.includes('hà giang')) return 'Tuyên Quang';
+
+    // 13. Lào Cai (Lào Cai + Yên Bái)
+    if (clean.includes('lào cai') || clean.includes('yên bái')) return 'Lào Cai';
+
+    // 14. Quảng Trị (Quảng Trị + Quảng Bình)
+    if (clean.includes('quảng trị') || clean.includes('quảng bình')) return 'Quảng Trị';
+
+    // 15. Quảng Ngãi (Quảng Ngãi + Kon Tum)
+    if (clean.includes('quảng ngãi') || clean.includes('kon tum')) return 'Quảng Ngãi';
+
+    // 16. Gia Lai (Gia Lai + Bình Định)
+    if (clean.includes('gia lai') || clean.includes('bình định')) return 'Gia Lai';
+
+    // 17. Khánh Hòa (Khánh Hòa + Ninh Thuận)
+    if (clean.includes('khánh hòa') || clean.includes('ninh thuận')) return 'Khánh Hòa';
+
+    // 18. Đắk Lắk (Đắk Lắk + Phú Yên)
+    if (clean.includes('đắk lắk') || clean.includes('dak lak') || clean.includes('phú yên')) return 'Đắk Lắk';
+
+    // 19. Lâm Đồng (Lâm Đồng + Đắk Nông + Bình Thuận)
+    if (clean.includes('lâm đồng') || clean.includes('đắk nông') || clean.includes('dak nong') || clean.includes('bình thuận')) return 'Lâm Đồng';
+
+    // 20. Đồng Nai (Đồng Nai + Bình Phước)
+    if (clean.includes('đồng nai') || clean.includes('bình phước')) return 'Đồng Nai';
+
+    // 21. Tây Ninh (Tây Ninh + Long An)
+    if (clean.includes('tây ninh') || clean.includes('long an')) return 'Tây Ninh';
+
+    // 22. Đồng Tháp (Đồng Tháp + Tiền Giang)
+    if (clean.includes('đồng tháp') || clean.includes('tiền giang')) return 'Đồng Tháp';
+
+    // 23. Vĩnh Long (Vĩnh Long + Bến Tre + Trà Vinh)
+    if (clean.includes('vĩnh long') || clean.includes('bến tre') || clean.includes('trà vinh')) return 'Vĩnh Long';
+
+    // 24. An Giang (An Giang + Kiên Giang)
+    if (clean.includes('an giang') || clean.includes('kiên giang')) return 'An Giang';
+
+    // 25. Cà Mau (Cà Mau + Bạc Liêu)
+    if (clean.includes('cà mau') || clean.includes('bạc liêu')) return 'Cà Mau';
+
+    // Các tỉnh giữ nguyên
+    if (clean.includes('quảng ninh')) return 'Quảng Ninh';
+    if (clean.includes('thanh hóa')) return 'Thanh Hóa';
+    if (clean.includes('nghệ an')) return 'Nghệ An';
+    if (clean.includes('hà tĩnh')) return 'Hà Tĩnh';
+    if (clean.includes('cao bằng')) return 'Cao Bằng';
+    if (clean.includes('lạng sơn')) return 'Lạng Sơn';
+    if (clean.includes('lai châu')) return 'Lai Châu';
+    if (clean.includes('điện biên')) return 'Điện Biên';
+    if (clean.includes('sơn la')) return 'Sơn La';
+
+    // Check against all other provinces in VIETNAM_PROVINCES
     for (const p of VIETNAM_PROVINCES) {
       if (clean.includes(p.name.toLowerCase())) return p.name;
+      if (p.oldNames) {
+        for (const oldN of p.oldNames) {
+          if (clean.includes(oldN.toLowerCase())) return p.name;
+        }
+      }
     }
     return 'Toàn Quốc';
   }
@@ -564,10 +647,15 @@ export class Database {
     if (!this.client) return { items: [], total: 0, maxPage: 1, currentPage: 1 };
     const p = Math.max(1, parseInt(page, 10) || 1);
     const offset = (p - 1) * limit;
+
+    const provObj = VIETNAM_PROVINCES.find(x => x.name === province || x.slug === province);
+    const names = provObj ? (provObj.oldNames || [provObj.name]) : [province];
+    const placeholders = names.map(() => '?').join(', ');
+
     try {
       const countRes = await this.client.execute({
-        sql: 'SELECT COUNT(*) as total FROM companies WHERE province = ?',
-        args: [province]
+        sql: `SELECT COUNT(*) as total FROM companies WHERE province IN (${placeholders})`,
+        args: names
       });
       const total = Number(countRes.rows[0]?.total || 0);
       const maxPage = Math.max(1, Math.ceil(total / limit));
@@ -576,11 +664,11 @@ export class Database {
         sql: `
           SELECT taxId, name, slug, representative, address, status, province, updatedAt, mainIndustry 
           FROM companies 
-          WHERE province = ? 
+          WHERE province IN (${placeholders}) 
           ORDER BY updatedAt DESC 
           LIMIT ? OFFSET ?
         `,
-        args: [province, limit, offset]
+        args: [...names, limit, offset]
       });
       return { items: res.rows || [], total, maxPage, currentPage: p };
     } catch (err) {
@@ -674,69 +762,308 @@ export class Database {
 }
 
 export const VIETNAM_PROVINCES = [
-  { name: 'TP Hồ Chí Minh', slug: 'tp-ho-chi-minh', region: 'Miền Nam', isHot: true },
-  { name: 'Hà Nội', slug: 'ha-noi', region: 'Miền Bắc', isHot: true },
-  { name: 'Đà Nẵng', slug: 'da-nang', region: 'Miền Trung', isHot: true },
-  { name: 'Bình Dương', slug: 'binh-duong', region: 'Miền Nam', isHot: true },
-  { name: 'Đồng Nai', slug: 'dong-nai', region: 'Miền Nam', isHot: true },
-  { name: 'Hải Phòng', slug: 'hai-phong', region: 'Miền Bắc', isHot: true },
-  { name: 'Cần Thơ', slug: 'can-tho', region: 'Miền Tây', isHot: true },
-  { name: 'Bà Rịa - Vũng Tàu', slug: 'ba-ria-vung-tau', region: 'Miền Nam', isHot: true },
-  { name: 'Long An', slug: 'long-an', region: 'Miền Tây' },
-  { name: 'Bắc Ninh', slug: 'bac-ninh', region: 'Miền Bắc' },
-  { name: 'Quảng Ninh', slug: 'quang-ninh', region: 'Miền Bắc' },
-  { name: 'Khánh Hòa', slug: 'khanh-hoa', region: 'Miền Trung' },
-  { name: 'Thanh Hóa', slug: 'thanh-hoa', region: 'Miền Trung' },
-  { name: 'Nghệ An', slug: 'nghe-an', region: 'Miền Trung' },
-  { name: 'Thừa Thiên Huế', slug: 'thua-thien-hue', region: 'Miền Trung' },
-  { name: 'Lâm Đồng', slug: 'lam-dong', region: 'Tây Nguyên' },
-  { name: 'Thái Nguyên', slug: 'thai-nguyen', region: 'Miền Bắc' },
-  { name: 'Vĩnh Phúc', slug: 'vinh-phuc', region: 'Miền Bắc' },
-  { name: 'Hải Dương', slug: 'hai-duong', region: 'Miền Bắc' },
-  { name: 'Hưng Yên', slug: 'hung-yen', region: 'Miền Bắc' },
-  { name: 'Bình Định', slug: 'binh-dinh', region: 'Miền Trung' },
-  { name: 'Quảng Nam', slug: 'quang-nam', region: 'Miền Trung' },
-  { name: 'Quảng Ngãi', slug: 'quang-ngai', region: 'Miền Trung' },
-  { name: 'Kiên Giang', slug: 'kien-giang', region: 'Miền Tây' },
-  { name: 'Tiền Giang', slug: 'tien-giang', region: 'Miền Tây' },
-  { name: 'Bến Tre', slug: 'ben-tre', region: 'Miền Tây' },
-  { name: 'Tây Ninh', slug: 'tay-ninh', region: 'Miền Nam' },
-  { name: 'Bình Phước', slug: 'binh-phuoc', region: 'Miền Nam' },
-  { name: 'Đắk Lắk', slug: 'dak-lak', region: 'Tây Nguyên' },
-  { name: 'Gia Lai', slug: 'gia-lai', region: 'Tây Nguyên' },
-  { name: 'An Giang', slug: 'an-giang', region: 'Miền Tây' },
-  { name: 'Đồng Tháp', slug: 'dong-thap', region: 'Miền Tây' },
-  { name: 'Vĩnh Long', slug: 'vinh-long', region: 'Miền Tây' },
-  { name: 'Bạc Liêu', slug: 'bac-lieu', region: 'Miền Tây' },
-  { name: 'Cà Mau', slug: 'ca-mau', region: 'Miền Tây' },
-  { name: 'Sóc Trăng', slug: 'soc-trang', region: 'Miền Tây' },
-  { name: 'Trà Vinh', slug: 'tra-vinh', region: 'Miền Tây' },
-  { name: 'Hậu Giang', slug: 'hau-giang', region: 'Miền Tây' },
-  { name: 'Ninh Thuận', slug: 'ninh-thuan', region: 'Miền Trung' },
-  { name: 'Bình Thuận', slug: 'binh-thuan', region: 'Miền Trung' },
-  { name: 'Phú Yên', slug: 'phu-yen', region: 'Miền Trung' },
-  { name: 'Quảng Bình', slug: 'quang-binh', region: 'Miền Trung' },
-  { name: 'Quảng Trị', slug: 'quang-tri', region: 'Miền Trung' },
-  { name: 'Hà Tĩnh', slug: 'ha-tinh', region: 'Miền Trung' },
-  { name: 'Nam Định', slug: 'nam-dinh', region: 'Miền Bắc' },
-  { name: 'Thái Bình', slug: 'thai-binh', region: 'Miền Bắc' },
-  { name: 'Ninh Bình', slug: 'ninh-binh', region: 'Miền Bắc' },
-  { name: 'Hà Nam', slug: 'ha-nam', region: 'Miền Bắc' },
-  { name: 'Bắc Giang', slug: 'bac-giang', region: 'Miền Bắc' },
-  { name: 'Phú Thọ', slug: 'phu-tho', region: 'Miền Bắc' },
-  { name: 'Hòa Bình', slug: 'hoa-binh', region: 'Miền Bắc' },
-  { name: 'Sơn La', slug: 'son-la', region: 'Miền Bắc' },
-  { name: 'Lai Châu', slug: 'lai-chau', region: 'Miền Bắc' },
-  { name: 'Điện Biên', slug: 'dien-bien', region: 'Miền Bắc' },
-  { name: 'Lào Cai', slug: 'lao-cai', region: 'Miền Bắc' },
-  { name: 'Yên Bái', slug: 'yen-bai', region: 'Miền Bắc' },
-  { name: 'Tuyên Quang', slug: 'tuyen-quang', region: 'Miền Bắc' },
-  { name: 'Hà Giang', slug: 'ha-giang', region: 'Miền Bắc' },
-  { name: 'Cao Bằng', slug: 'cao-bang', region: 'Miền Bắc' },
-  { name: 'Bắc Kạn', slug: 'bac-kan', region: 'Miền Bắc' },
-  { name: 'Lạng Sơn', slug: 'lang-son', region: 'Miền Bắc' },
-  { name: 'Kon Tum', slug: 'kon-tum', region: 'Tây Nguyên' },
-  { name: 'Đắk Nông', slug: 'dak-nong', region: 'Tây Nguyên' }
+  // --- 6 THÀNH PHỐ TRỰC THUỘC TRUNG ƯƠNG ---
+  {
+    name: 'TP Hồ Chí Minh',
+    slug: 'tp-ho-chi-minh',
+    region: 'Miền Nam',
+    isHot: true,
+    isCity: true,
+    mergedFrom: 'Gồm TP.HCM, Bình Dương, Bà Rịa - Vũng Tàu',
+    oldNames: ['TP Hồ Chí Minh', 'Bình Dương', 'Bà Rịa - Vũng Tàu'],
+    oldSlugs: ['tp-ho-chi-minh', 'binh-duong', 'ba-ria-vung-tau']
+  },
+  {
+    name: 'Hà Nội',
+    slug: 'ha-noi',
+    region: 'Miền Bắc',
+    isHot: true,
+    isCity: true,
+    mergedFrom: 'Giữ nguyên đơn vị hành chính',
+    oldNames: ['Hà Nội'],
+    oldSlugs: ['ha-noi']
+  },
+  {
+    name: 'Hải Phòng',
+    slug: 'hai-phong',
+    region: 'Miền Bắc',
+    isHot: true,
+    isCity: true,
+    mergedFrom: 'Gồm Hải Phòng, Hải Dương',
+    oldNames: ['Hải Phòng', 'Hải Dương'],
+    oldSlugs: ['hai-phong', 'hai-duong']
+  },
+  {
+    name: 'Đà Nẵng',
+    slug: 'da-nang',
+    region: 'Miền Trung',
+    isHot: true,
+    isCity: true,
+    mergedFrom: 'Gồm Đà Nẵng, Quảng Nam',
+    oldNames: ['Đà Nẵng', 'Quảng Nam'],
+    oldSlugs: ['da-nang', 'quang-nam']
+  },
+  {
+    name: 'Cần Thơ',
+    slug: 'can-tho',
+    region: 'Miền Tây',
+    isHot: true,
+    isCity: true,
+    mergedFrom: 'Gồm Cần Thơ, Hậu Giang, Sóc Trăng',
+    oldNames: ['Cần Thơ', 'Hậu Giang', 'Sóc Trăng'],
+    oldSlugs: ['can-tho', 'hau-giang', 'soc-trang']
+  },
+  {
+    name: 'Huế',
+    slug: 'hue',
+    region: 'Miền Trung',
+    isHot: true,
+    isCity: true,
+    mergedFrom: 'Thành phố Huế trực thuộc Trung ương (trước là Thừa Thiên Huế)',
+    oldNames: ['Huế', 'Thừa Thiên Huế'],
+    oldSlugs: ['hue', 'thua-thien-hue']
+  },
+
+  // --- 28 TỈNH TRỰC THUỘC TRUNG ƯƠNG ---
+  // Miền Bắc
+  {
+    name: 'Bắc Ninh',
+    slug: 'bac-ninh',
+    region: 'Miền Bắc',
+    isHot: true,
+    mergedFrom: 'Gồm Bắc Ninh, Bắc Giang',
+    oldNames: ['Bắc Ninh', 'Bắc Giang'],
+    oldSlugs: ['bac-ninh', 'bac-giang']
+  },
+  {
+    name: 'Quảng Ninh',
+    slug: 'quang-ninh',
+    region: 'Miền Bắc',
+    isHot: true,
+    mergedFrom: 'Giữ nguyên đơn vị hành chính',
+    oldNames: ['Quảng Ninh'],
+    oldSlugs: ['quang-ninh']
+  },
+  {
+    name: 'Thái Nguyên',
+    slug: 'thai-nguyen',
+    region: 'Miền Bắc',
+    mergedFrom: 'Gồm Thái Nguyên, Bắc Kạn',
+    oldNames: ['Thái Nguyên', 'Bắc Kạn'],
+    oldSlugs: ['thai-nguyen', 'bac-kan']
+  },
+  {
+    name: 'Phú Thọ',
+    slug: 'phu-tho',
+    region: 'Miền Bắc',
+    mergedFrom: 'Gồm Phú Thọ, Vĩnh Phúc, Hòa Bình',
+    oldNames: ['Phú Thọ', 'Vĩnh Phúc', 'Hòa Bình'],
+    oldSlugs: ['phu-tho', 'vinh-phuc', 'hoa-binh']
+  },
+  {
+    name: 'Hưng Yên',
+    slug: 'hung-yen',
+    region: 'Miền Bắc',
+    mergedFrom: 'Gồm Hưng Yên, Thái Bình',
+    oldNames: ['Hưng Yên', 'Thái Bình'],
+    oldSlugs: ['hung-yen', 'thai-binh']
+  },
+  {
+    name: 'Ninh Bình',
+    slug: 'ninh-binh',
+    region: 'Miền Bắc',
+    mergedFrom: 'Gồm Ninh Bình, Nam Định, Hà Nam',
+    oldNames: ['Ninh Bình', 'Nam Định', 'Hà Nam'],
+    oldSlugs: ['ninh-binh', 'nam-dinh', 'ha-nam']
+  },
+  {
+    name: 'Tuyên Quang',
+    slug: 'tuyen-quang',
+    region: 'Miền Bắc',
+    mergedFrom: 'Gồm Tuyên Quang, Hà Giang',
+    oldNames: ['Tuyên Quang', 'Hà Giang'],
+    oldSlugs: ['tuyen-quang', 'ha-giang']
+  },
+  {
+    name: 'Lào Cai',
+    slug: 'lao-cai',
+    region: 'Miền Bắc',
+    mergedFrom: 'Gồm Lào Cai, Yên Bái',
+    oldNames: ['Lào Cai', 'Yên Bái'],
+    oldSlugs: ['lao-cai', 'yen-bai']
+  },
+  {
+    name: 'Cao Bằng',
+    slug: 'cao-bang',
+    region: 'Miền Bắc',
+    mergedFrom: 'Giữ nguyên đơn vị hành chính',
+    oldNames: ['Cao Bằng'],
+    oldSlugs: ['cao-bang']
+  },
+  {
+    name: 'Lạng Sơn',
+    slug: 'lang-son',
+    region: 'Miền Bắc',
+    mergedFrom: 'Giữ nguyên đơn vị hành chính',
+    oldNames: ['Lạng Sơn'],
+    oldSlugs: ['lang-son']
+  },
+  {
+    name: 'Lai Châu',
+    slug: 'lai-chau',
+    region: 'Miền Bắc',
+    mergedFrom: 'Giữ nguyên đơn vị hành chính',
+    oldNames: ['Lai Châu'],
+    oldSlugs: ['lai-chau']
+  },
+  {
+    name: 'Điện Biên',
+    slug: 'dien-bien',
+    region: 'Miền Bắc',
+    mergedFrom: 'Giữ nguyên đơn vị hành chính',
+    oldNames: ['Điện Biên'],
+    oldSlugs: ['dien-bien']
+  },
+  {
+    name: 'Sơn La',
+    slug: 'son-la',
+    region: 'Miền Bắc',
+    mergedFrom: 'Giữ nguyên đơn vị hành chính',
+    oldNames: ['Sơn La'],
+    oldSlugs: ['son-la']
+  },
+
+  // Miền Trung
+  {
+    name: 'Thanh Hóa',
+    slug: 'thanh-hoa',
+    region: 'Miền Trung',
+    isHot: true,
+    mergedFrom: 'Giữ nguyên đơn vị hành chính',
+    oldNames: ['Thanh Hóa'],
+    oldSlugs: ['thanh-hoa']
+  },
+  {
+    name: 'Nghệ An',
+    slug: 'nghe-an',
+    region: 'Miền Trung',
+    isHot: true,
+    mergedFrom: 'Giữ nguyên đơn vị hành chính',
+    oldNames: ['Nghệ An'],
+    oldSlugs: ['nghe-an']
+  },
+  {
+    name: 'Hà Tĩnh',
+    slug: 'ha-tinh',
+    region: 'Miền Trung',
+    mergedFrom: 'Giữ nguyên đơn vị hành chính',
+    oldNames: ['Hà Tĩnh'],
+    oldSlugs: ['ha-tinh']
+  },
+  {
+    name: 'Quảng Trị',
+    slug: 'quang-tri',
+    region: 'Miền Trung',
+    mergedFrom: 'Gồm Quảng Trị, Quảng Bình',
+    oldNames: ['Quảng Trị', 'Quảng Bình'],
+    oldSlugs: ['quang-tri', 'quang-binh']
+  },
+  {
+    name: 'Quảng Ngãi',
+    slug: 'quang-ngai',
+    region: 'Miền Trung',
+    mergedFrom: 'Gồm Quảng Ngãi, Kon Tum',
+    oldNames: ['Quảng Ngãi', 'Kon Tum'],
+    oldSlugs: ['quang-ngai', 'kon-tum']
+  },
+  {
+    name: 'Gia Lai',
+    slug: 'gia-lai',
+    region: 'Miền Trung',
+    mergedFrom: 'Gồm Gia Lai, Bình Định',
+    oldNames: ['Gia Lai', 'Bình Định'],
+    oldSlugs: ['gia-lai', 'binh-dinh']
+  },
+  {
+    name: 'Khánh Hòa',
+    slug: 'khanh-hoa',
+    region: 'Miền Trung',
+    isHot: true,
+    mergedFrom: 'Gồm Khánh Hòa, Ninh Thuận',
+    oldNames: ['Khánh Hòa', 'Ninh Thuận'],
+    oldSlugs: ['khanh-hoa', 'ninh-thuan']
+  },
+
+  // Tây Nguyên
+  {
+    name: 'Đắk Lắk',
+    slug: 'dak-lak',
+    region: 'Tây Nguyên',
+    mergedFrom: 'Gồm Đắk Lắk, Phú Yên',
+    oldNames: ['Đắk Lắk', 'Phú Yên'],
+    oldSlugs: ['dak-lak', 'phu-yen']
+  },
+  {
+    name: 'Lâm Đồng',
+    slug: 'lam-dong',
+    region: 'Tây Nguyên',
+    mergedFrom: 'Gồm Lâm Đồng, Đắk Nông, Bình Thuận',
+    oldNames: ['Lâm Đồng', 'Đắk Nông', 'Bình Thuận'],
+    oldSlugs: ['lam-dong', 'dak-nong', 'binh-thuan']
+  },
+
+  // Miền Nam (Đông Nam Bộ)
+  {
+    name: 'Đồng Nai',
+    slug: 'dong-nai',
+    region: 'Miền Nam',
+    isHot: true,
+    mergedFrom: 'Gồm Đồng Nai, Bình Phước',
+    oldNames: ['Đồng Nai', 'Bình Phước'],
+    oldSlugs: ['dong-nai', 'binh-phuoc']
+  },
+  {
+    name: 'Tây Ninh',
+    slug: 'tay-ninh',
+    region: 'Miền Nam',
+    mergedFrom: 'Gồm Tây Ninh, Long An',
+    oldNames: ['Tây Ninh', 'Long An'],
+    oldSlugs: ['tay-ninh', 'long-an']
+  },
+
+  // Miền Tây (Đồng bằng sông Cửu Long)
+  {
+    name: 'Đồng Tháp',
+    slug: 'dong-thap',
+    region: 'Miền Tây',
+    mergedFrom: 'Gồm Đồng Tháp, Tiền Giang',
+    oldNames: ['Đồng Tháp', 'Tiền Giang'],
+    oldSlugs: ['dong-thap', 'tien-giang']
+  },
+  {
+    name: 'Vĩnh Long',
+    slug: 'vinh-long',
+    region: 'Miền Tây',
+    mergedFrom: 'Gồm Vĩnh Long, Bến Tre, Trà Vinh',
+    oldNames: ['Vĩnh Long', 'Bến Tre', 'Trà Vinh'],
+    oldSlugs: ['vinh-long', 'ben-tre', 'tra-vinh']
+  },
+  {
+    name: 'An Giang',
+    slug: 'an-giang',
+    region: 'Miền Tây',
+    mergedFrom: 'Gồm An Giang, Kiên Giang',
+    oldNames: ['An Giang', 'Kiên Giang'],
+    oldSlugs: ['an-giang', 'kien-giang']
+  },
+  {
+    name: 'Cà Mau',
+    slug: 'ca-mau',
+    region: 'Miền Tây',
+    mergedFrom: 'Gồm Cà Mau, Bạc Liêu',
+    oldNames: ['Cà Mau', 'Bạc Liêu'],
+    oldSlugs: ['ca-mau', 'bac-lieu']
+  }
 ];
 
 export const TOP_INDUSTRIES = [
