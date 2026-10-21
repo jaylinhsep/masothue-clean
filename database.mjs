@@ -473,17 +473,46 @@ export class Database {
 
   async searchCompanies(query, limit = 20) {
     if (!query || !query.trim() || !this.client) return [];
-    const q = `%${query.trim()}%`;
+    const raw = query.trim();
+    const upper = '%' + raw.toUpperCase() + '%';
+    const lower = '%' + raw.toLowerCase() + '%';
+    const slugTerm = '%' + this.slugify(raw) + '%';
+    const words = raw.split(/\s+/).map(w => this.slugify(w)).filter(Boolean);
+
+    const conditions = [
+      'taxId LIKE ?',
+      'name LIKE ?',
+      'name LIKE ?',
+      'representative LIKE ?',
+      'slug LIKE ?'
+    ];
+    const args = ['%' + raw + '%', upper, lower, upper, slugTerm];
+
+    if (words.length > 1) {
+      const wordClauses = words.map(() => '(slug LIKE ? OR slug LIKE ? OR slug LIKE ?)').join(' AND ');
+      conditions.push('(' + wordClauses + ')');
+      words.forEach(w => {
+        args.push(`%-${w}-%`, `%-${w}`, `${w}-%`);
+      });
+    }
+
     try {
+      const sql = `
+        SELECT taxId, name, slug, representative, address, status, province, updatedAt,
+          CASE 
+            WHEN taxId = ? THEN 1
+            WHEN name LIKE ? THEN 2
+            WHEN slug LIKE ? THEN 3
+            ELSE 4 
+          END AS relevance
+        FROM companies 
+        WHERE ${conditions.join(' OR ')} 
+        ORDER BY relevance ASC, updatedAt DESC 
+        LIMIT ?
+      `;
       const res = await this.client.execute({
-        sql: `
-          SELECT taxId, name, slug, representative, address, status, province, updatedAt 
-          FROM companies 
-          WHERE taxId LIKE ? OR name LIKE ? OR representative LIKE ?
-          ORDER BY updatedAt DESC 
-          LIMIT ?
-        `,
-        args: [q, q, q, limit]
+        sql,
+        args: [raw, upper, slugTerm, ...args, limit]
       });
       return (res.rows || []).map(r => ({
         name: r.name,
