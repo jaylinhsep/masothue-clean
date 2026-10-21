@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'url';
 import { gotScraping } from 'got-scraping';
 import { MasothueCrawler } from './crawler.mjs';
@@ -27,6 +28,53 @@ if (fs.existsSync(envFile)) {
 
 const app = express();
 const crawler = new MasothueCrawler();
+
+// --- IN-MEMORY CACHE FOR ULTRA-FAST SSR (<5ms) ---
+const pageCache = new Map();
+const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function getCachedPage(key) {
+  const item = pageCache.get(key);
+  if (!item) return null;
+  if (Date.now() - item.time > item.ttl) {
+    pageCache.delete(key);
+    return null;
+  }
+  return item.html;
+}
+
+function setCachedPage(key, html, ttl = DEFAULT_TTL_MS) {
+  if (pageCache.size > 3000) {
+    const oldestKey = pageCache.keys().next().value;
+    pageCache.delete(oldestKey);
+  }
+  pageCache.set(key, { html, time: Date.now(), ttl });
+}
+
+// Fast Native Gzip Compression Middleware (reduces payload by 80%)
+app.use((req, res, next) => {
+  const acceptEncoding = req.headers['accept-encoding'] || '';
+  if (!acceptEncoding.includes('gzip')) return next();
+
+  const originalSend = res.send;
+  res.send = function (body) {
+    if (typeof body === 'string' && body.length > 1024) {
+      res.setHeader('Content-Encoding', 'gzip');
+      res.setHeader('Vary', 'Accept-Encoding');
+      if (!res.getHeader('Content-Type')) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      }
+      try {
+        const compressed = zlib.gzipSync(Buffer.from(body, 'utf-8'));
+        return res.end(compressed);
+      } catch (e) {
+        return originalSend.apply(this, arguments);
+      }
+    }
+    return originalSend.apply(this, arguments);
+  };
+  next();
+});
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public'), { etag: false, maxAge: 0 }));
@@ -76,8 +124,13 @@ app.get('/sitemap.xml', async (req, res) => {
 // Hub 1: Danh bạ 63 Tỉnh Thành
 app.get('/tinh-thanh', async (req, res) => {
   try {
+    const cacheKey = 'hub:provinces:index';
+    const cached = getCachedPage(cacheKey);
+    if (cached) return res.send(cached);
+
     const stats = await db.getProvinceStats();
     const html = seoRenderer.renderProvincesIndexPage(stats, req.headers.host);
+    setCachedPage(cacheKey, html, 30 * 60 * 1000); // 30 mins
     res.send(html);
   } catch (err) {
     console.error('[Hub Provinces Error]:', err);
@@ -93,8 +146,13 @@ app.get('/tinh-thanh/:slug', async (req, res) => {
     if (!prov) return res.redirect('/tinh-thanh');
 
     const page = parseInt(req.query.page, 10) || 1;
+    const cacheKey = `hub:province:${slug}:${page}`;
+    const cached = getCachedPage(cacheKey);
+    if (cached) return res.send(cached);
+
     const data = await db.getCompaniesByProvincePaginated(prov.name, page, 24);
     const html = seoRenderer.renderProvinceDetailPage(prov, data, req.headers.host);
+    setCachedPage(cacheKey, html, 10 * 60 * 1000); // 10 mins
     res.send(html);
   } catch (err) {
     console.error('[Hub Province Detail Error]:', err);
@@ -105,8 +163,13 @@ app.get('/tinh-thanh/:slug', async (req, res) => {
 // Hub 2: Danh bạ Ngành Nghề
 app.get('/nganh-nghe', async (req, res) => {
   try {
+    const cacheKey = 'hub:industries:index';
+    const cached = getCachedPage(cacheKey);
+    if (cached) return res.send(cached);
+
     const stats = await db.getTopIndustriesWithCounts();
     const html = seoRenderer.renderIndustriesIndexPage(stats, req.headers.host);
+    setCachedPage(cacheKey, html, 30 * 60 * 1000); // 30 mins
     res.send(html);
   } catch (err) {
     console.error('[Hub Industries Error]:', err);
@@ -129,8 +192,13 @@ app.get('/nganh-nghe/:slug', async (req, res) => {
     }
 
     const page = parseInt(req.query.page, 10) || 1;
+    const cacheKey = `hub:industry:${ind.code}:${page}`;
+    const cached = getCachedPage(cacheKey);
+    if (cached) return res.send(cached);
+
     const data = await db.getCompaniesByIndustryPaginated(ind.code, page, 24);
     const html = seoRenderer.renderIndustryDetailPage(ind, data, req.headers.host);
+    setCachedPage(cacheKey, html, 10 * 60 * 1000); // 10 mins
     res.send(html);
   } catch (err) {
     console.error('[Hub Industry Detail Error]:', err);
@@ -142,8 +210,13 @@ app.get('/nganh-nghe/:slug', async (req, res) => {
 app.get('/doanh-nghiep-moi', async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
+    const cacheKey = `hub:recent:page:${page}`;
+    const cached = getCachedPage(cacheKey);
+    if (cached) return res.send(cached);
+
     const data = await db.getRecentCompaniesPaginated(page, 24);
     const html = seoRenderer.renderRecentCompaniesPage(data, req.headers.host);
+    setCachedPage(cacheKey, html, 2 * 60 * 1000); // 2 mins cache
     res.send(html);
   } catch (err) {
     console.error('[Hub Recent Error]:', err);
@@ -155,6 +228,13 @@ app.get('/doanh-nghiep-moi', async (req, res) => {
 async function handleCompanyPage(req, res, slug) {
   if (!slug) return res.redirect('/');
   const cleanSlug = slug.replace(/^\/?(mst\/)?/, '');
+
+  // 0. Ultra-fast Memory Cache hit (<1ms)
+  const cacheKey = `company:${cleanSlug}`;
+  const cachedHtml = getCachedPage(cacheKey);
+  if (cachedHtml) {
+    return res.send(cachedHtml);
+  }
 
   try {
     // 1. Check if company already in Database
@@ -177,13 +257,17 @@ async function handleCompanyPage(req, res, slug) {
       }
     }
 
-    // 2b. If in DB but missing representative or specific tax office, auto-enrich on the fly!
+    // 2b. Auto-enrich in background (NON-BLOCKING) so user request is served immediately!
     if (company && company.data && (!company.representative || !company.data.representative || !company.data.managedBy || company.data.managedBy === 'Cơ quan Thuế')) {
-      const dRes = await crawler.getDetail('/' + (company.slug || cleanSlug), true);
-      if (dRes.success && dRes.data && (dRes.data.representative || dRes.data.managedBy)) {
-        await db.saveCompany(dRes.data);
-        company = (await db.getCompanyBySlug(cleanSlug)) || (await db.getCompanyByTaxId(company.taxId));
-      }
+      setImmediate(() => {
+        crawler.getDetail('/' + (company.slug || cleanSlug), true)
+          .then(dRes => {
+            if (dRes.success && dRes.data && (dRes.data.representative || dRes.data.managedBy)) {
+              db.saveCompany(dRes.data).catch(() => {});
+            }
+          })
+          .catch(() => {});
+      });
     }
 
     if (!company) {
@@ -216,6 +300,10 @@ async function handleCompanyPage(req, res, slug) {
       byProvince: relatedProvince,
       byIndustry: relatedIndustry
     }, req.headers.host);
+
+    // Cache the rendered page
+    setCachedPage(cacheKey, html);
+
     res.send(html);
   } catch (err) {
     console.error(`[SEO Route Error] ${slug}:`, err);

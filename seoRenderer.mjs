@@ -99,7 +99,7 @@ export class SeoRenderer {
         <p style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">
           Tra Cứu Mã Số Thuế Sạch • Dữ liệu công khai từ Cổng thông tin Doanh nghiệp & Tổng cục Thuế
         </p>
-        <p class="footer-sub">Không quảng cáo, tốc độ tải dưới 0.3s.</p>
+        <p class="footer-sub">Dữ liệu cập nhật liên tục, hoàn toàn miễn phí và không quảng cáo.</p>
       </div>
     </footer>`;
   }
