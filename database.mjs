@@ -516,6 +516,7 @@ export class Database {
       });
       return (res.rows || []).map(r => ({
         name: r.name,
+        slug: r.slug,
         url: `/mst/${r.slug}`,
         taxId: r.taxId,
         representative: r.representative,

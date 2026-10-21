@@ -223,47 +223,47 @@ export class MasothueCrawler {
 
   // --- Enrich Tax ID via Serper Google Snippet (Bypasses Cloudflare 100%) ---
   async enrichViaSerper(taxId, companyName = '') {
-    const serperKey = process.env.SERPER_API_KEY || process.env.SERPER_KEY;
-    if (!serperKey || !taxId) return null;
+    const rawKeys = process.env.SERPER_API_KEY || process.env.SERPER_KEY || '';
+    const serperKeys = rawKeys.split(',').map(k => k.trim()).filter(Boolean);
+    if (serperKeys.length === 0 || !taxId) return null;
 
-    try {
-      const res = await fetch('https://google.serper.dev/search', {
-        method: 'POST',
-        headers: {
-          'X-API-KEY': serperKey.trim(),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          q: `${taxId} "đại diện"`,
-          gl: 'vn',
-          hl: 'vi',
-          num: 5
-        })
-      });
+    for (const key of serperKeys) {
+      try {
+        const res = await fetch('https://google.serper.dev/search', {
+          method: 'POST',
+          headers: {
+            'X-API-KEY': key,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            q: `${taxId} "đại diện"`,
+            gl: 'vn',
+            hl: 'vi',
+            num: 5
+          })
+        });
 
-      if (res.status === 429) {
-        const retryAfter = parseInt(res.headers.get('retry-after'), 10) || 60;
-        return { isRateLimited: true, retryAfter };
-      }
-      if (!res.ok) return null;
-      let data = await res.json();
-      if (!data.organic || data.organic.length === 0) {
-        // Fallback: try searching just the tax ID without quotes to match more snippet variations
-        try {
-          const fbRes = await fetch('https://google.serper.dev/search', {
-            method: 'POST',
-            headers: { 'X-API-KEY': serperKey.trim(), 'Content-Type': 'application/json' },
-            body: JSON.stringify({ q: taxId, gl: 'vn', hl: 'vi', num: 5 })
-          });
-          if (fbRes.ok) {
-            const fbData = await fbRes.json();
-            if (fbData.organic && fbData.organic.length > 0) {
-              data = fbData;
+        if (res.status === 429 || res.status === 400) {
+          continue;
+        }
+        if (!res.ok) continue;
+        let data = await res.json();
+        if (!data.organic || data.organic.length === 0) {
+          try {
+            const fbRes = await fetch('https://google.serper.dev/search', {
+              method: 'POST',
+              headers: { 'X-API-KEY': key, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ q: taxId, gl: 'vn', hl: 'vi', num: 5 })
+            });
+            if (fbRes.ok) {
+              const fbData = await fbRes.json();
+              if (fbData.organic && fbData.organic.length > 0) {
+                data = fbData;
+              }
             }
-          }
-        } catch (e) {}
-      }
-      if (!data.organic || data.organic.length === 0) return null;
+          } catch (e) {}
+        }
+        if (!data.organic || data.organic.length === 0) continue;
 
       let representative = '';
       let phone = '';
@@ -322,119 +322,245 @@ export class MasothueCrawler {
     } catch (err) {
       console.warn('[enrichViaSerper error]', err.message);
     }
-    return null;
   }
+  return null;
+}
 
   // --- Serper.dev (Free 2,500 Google Searches) Fallback ---
   async searchViaSerper(query) {
-    const serperKey = process.env.SERPER_API_KEY || process.env.SERPER_KEY;
-    if (!serperKey) return null;
+    const rawKeys = process.env.SERPER_API_KEY || process.env.SERPER_KEY || '';
+    const serperKeys = rawKeys.split(',').map(k => k.trim()).filter(Boolean);
+    if (serperKeys.length === 0) return null;
 
+    for (const key of serperKeys) {
+      try {
+        const res = await fetch('https://google.serper.dev/search', {
+          method: 'POST',
+          headers: {
+            'X-API-KEY': key,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            q: `site:masothue.com ${query.trim()}`,
+            gl: 'vn',
+            hl: 'vi',
+            num: 10
+          })
+        });
+
+        if (res.status === 429 || res.status === 400) {
+          continue; // Try next key if out of credits or rate limited
+        }
+        if (!res.ok) continue;
+        let data = await res.json();
+        if (!data.organic || data.organic.length === 0) {
+          try {
+            const fbRes = await fetch('https://google.serper.dev/search', {
+              method: 'POST',
+              headers: { 'X-API-KEY': key, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ q: query.trim(), gl: 'vn', hl: 'vi', num: 5 })
+            });
+            if (fbRes.ok) {
+              const fbData = await fbRes.json();
+              if (fbData.organic && fbData.organic.length > 0) {
+                data = fbData;
+              }
+            }
+          } catch (e) {}
+        }
+        if (!data.organic || data.organic.length === 0) continue;
+
+        const items = [];
+        for (const item of data.organic) {
+          const link = item.link || '';
+          const taxMatch = (link + ' ' + (item.title || '') + ' ' + (item.snippet || '')).match(/(\d{10}(-\d{3})?)/);
+          if (taxMatch) {
+            const taxId = taxMatch[1];
+            let cleanName = (item.title || '')
+              .replace(/-\s*MaSoThue.*$/i, '')
+              .replace(/-\s*Mã số thuế.*$/i, '')
+              .replace(/^\d{10}(-\d{3})?\s*-\s*/, '')
+              .trim();
+
+            let rep = '';
+            const repMatch = (item.snippet || '').match(/(?:Người đại diện theo pháp luật|Đại diện theo pháp luật|Người đại diện pháp luật|Đại diện pháp luật|Người đại diện)[:\s,]+([^;·–\n]+)/i);
+            if (repMatch) {
+              let r = repMatch[1].trim()
+                .replace(/^(theo pháp luật|theo uỷ quyền)[\s.:,-]+/i, '')
+                .replace(/\s*(Ngoài ra.*|\d{10}.*|Ẩn số điện thoại.*|Chức vụ.*)$/i, '')
+                .replace(/^[,\-–\s.:]+|[,\-–\s.:]+$/g, '')
+                .trim();
+              const isCompanyWord = /(công ty|tnhh|cổ phần|chi nhánh|văn phòng|tập đoàn|doanh nghiệp)/i.test(r);
+              if (!isCompanyWord && r.length >= 2 && r.length <= 60) {
+                rep = r;
+              }
+            }
+
+            const slug = `${taxId}-${this.slugify(cleanName)}`;
+            const comp = {
+              name: cleanName,
+              slug,
+              url: `/mst/${slug}`,
+              taxId,
+              representative: rep,
+              address: item.snippet || 'Toàn quốc',
+              province: db.extractProvince(item.snippet || ''),
+              status: 'Đang hoạt động'
+            };
+            items.push(comp);
+
+            // Persist to DB in background
+            db.saveCompany(comp).catch(() => {});
+          }
+        }
+
+        if (items.length > 0) {
+          return {
+            success: true,
+            isDirect: items.length === 1,
+            fromSerper: true,
+            items,
+            currentPage: 1,
+            maxPage: 1,
+            totalFound: items.length
+          };
+        }
+      } catch (e) {
+        console.warn('[Serper Error]', e.message);
+      }
+    }
+    return null;
+  }
+
+  // --- DuckDuckGo Web Search Fallback (100% Free, Unlimited, Bypasses Cloudflare) ---
+  async searchViaDuckDuckGo(query) {
+    if (!query || !query.trim()) return null;
+    const cleanQ = query.trim();
     try {
-      const res = await fetch('https://google.serper.dev/search', {
-        method: 'POST',
+      const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQ + ' mã số thuế')}`;
+      const res = await gotScraping({
+        url: searchUrl,
         headers: {
-          'X-API-KEY': serperKey.trim(),
-          'Content-Type': 'application/json'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Referer': 'https://html.duckduckgo.com/'
         },
-        body: JSON.stringify({
-          q: `site:masothue.com ${query.trim()}`,
-          gl: 'vn',
-          hl: 'vi',
-          num: 10
-        })
+        timeout: { request: 6500 }
       });
 
-      if (res.status === 429) {
-        const retryAfter = parseInt(res.headers.get('retry-after'), 10) || 60;
-        return { isRateLimited: true, retryAfter };
-      }
-      if (!res.ok) return null;
-      let data = await res.json();
-      if (!data.organic || data.organic.length === 0) {
-        // Fallback: try searching just the tax ID without quotes to match more snippet variations
-        try {
-          const fbRes = await fetch('https://google.serper.dev/search', {
-            method: 'POST',
-            headers: { 'X-API-KEY': serperKey.trim(), 'Content-Type': 'application/json' },
-            body: JSON.stringify({ q: taxId, gl: 'vn', hl: 'vi', num: 5 })
-          });
-          if (fbRes.ok) {
-            const fbData = await fbRes.json();
-            if (fbData.organic && fbData.organic.length > 0) {
-              data = fbData;
-            }
-          }
-        } catch (e) {}
-      }
-      if (!data.organic || data.organic.length === 0) return null;
+      if (res.statusCode !== 200 || !res.body) return null;
 
+      const $ = cheerio.load(res.body);
       const items = [];
-      for (const item of data.organic) {
-        const link = item.link || '';
-        const taxMatch = link.match(/(\d{10}(-\d{3})?)/);
-        if (taxMatch) {
-          const taxId = taxMatch[1];
-          let cleanName = (item.title || '')
-            .replace(/-\s*MaSoThue/i, '')
-            .replace(/^\d{10}(-\d{3})?\s*-\s*/, '')
-            .trim();
+      const seenTax = new Set();
 
-          let path = link.replace(/https?:\/\/(www\.)?masothue\.com/, '');
-          if (!path.startsWith('/')) path = '/' + path;
+      $('.result__body').each((_, el) => {
+        const $el = $(el);
+        const title = $el.find('.result__title a').text().trim();
+        const link = $el.find('.result__title a').attr('href') || '';
+        const snippet = $el.find('.result__snippet').text().trim();
 
-          let rep = '';
-          const repMatch = (item.snippet || '').match(/(?:Người đại diện theo pháp luật|Đại diện theo pháp luật|Người đại diện pháp luật|Đại diện pháp luật|Người đại diện)[:\s,]+([^;·–\n]+)/i);
-          if (repMatch) {
-            let r = repMatch[1].trim()
-              .replace(/^(theo pháp luật|theo uỷ quyền)[\s.:,-]+/i, '')
-              .replace(/\s*(Ngoài ra.*|\d{10}.*|Ẩn số điện thoại.*|Chức vụ.*)$/i, '')
-              .replace(/^[,\-–\s.:]+|[,\-–\s.:]+$/g, '')
-              .trim();
-            const isCompanyWord = /(công ty|tnhh|cổ phần|chi nhánh|văn phòng|tập đoàn|doanh nghiệp)/i.test(r);
-            if (!isCompanyWord && r.length >= 2 && r.length <= 60) {
-              rep = r;
-            }
+        let targetUrl = '';
+        const uddgMatch = link.match(/uddg=([^&]+)/);
+        if (uddgMatch) {
+          try {
+            targetUrl = decodeURIComponent(uddgMatch[1]);
+          } catch (e) {
+            targetUrl = link;
           }
-
-          items.push({
-            name: cleanName,
-            url: path,
-            taxId,
-            representative: rep,
-            address: item.snippet || 'Toàn quốc'
-          });
+        } else {
+          targetUrl = link;
         }
+
+        const fullText = `${title} ${snippet} ${targetUrl}`;
+        const taxMatch = fullText.match(/\b(\d{10}(-\d{3})?)\b/);
+        if (!taxMatch) return;
+
+        const taxId = taxMatch[1];
+        if (seenTax.has(taxId)) return;
+        seenTax.add(taxId);
+
+        let cleanName = title
+          .replace(/-\s*MaSoThue.*$/i, '')
+          .replace(/-\s*Mã số thuế.*$/i, '')
+          .replace(/-\s*Thông tin doanh nghiệp.*$/i, '')
+          .replace(/-\s*Thư Viện Pháp Luật.*$/i, '')
+          .replace(/-\s*CV Work.*$/i, '')
+          .replace(/^\d{10}(-\d{3})?\s*[-–—:]\s*/, '')
+          .replace(/\s*[-–—:]\s*Mã số\s*\.\.\.?$/i, '')
+          .replace(/\s*\.\.\.?$/, '')
+          .trim();
+
+        if (cleanName.length < 5) {
+          const nameInSnippet = snippet.match(/(?:CÔNG TY|DOANH NGHIỆP|CHI NHÁNH|VĂN PHÒNG ĐẠI DIỆN|HTX|HỢP TÁC XÃ)[^–—\-\.⭐:]+/i);
+          if (nameInSnippet) cleanName = nameInSnippet[0].trim();
+        }
+
+        let address = '';
+        const addrMatch = snippet.match(/(?:Địa chỉ|Trụ sở|địa chỉ tại)[:\s]+([^;·–—\n]+)/i);
+        if (addrMatch) {
+          address = addrMatch[1].trim();
+        } else {
+          address = snippet.replace(/.*?\b\d{10}(-\d{3})?\b\s*[-–—:⭐]*\s*/, '').slice(0, 120);
+        }
+
+        let rep = '';
+        const repMatch = snippet.match(/(?:Người đại diện|Đại diện pháp luật|Đại diện)[:\s]+([^;·–—\n]+)/i);
+        if (repMatch) rep = repMatch[1].trim();
+
+        const slug = `${taxId}-${this.slugify(cleanName)}`;
+        const comp = {
+          name: cleanName,
+          slug,
+          url: `/mst/${slug}`,
+          taxId,
+          representative: rep,
+          address: address || 'Đang cập nhật',
+          province: db.extractProvince(address),
+          status: 'Đang hoạt động'
+        };
+        items.push(comp);
+      });
+
+      // Enrich top items with authoritative VietQR details if name is truncated or address is short
+      for (let i = 0; i < Math.min(items.length, 5); i++) {
+        const item = items[i];
+        if (item.name.includes('...') || item.name.length < 15 || !item.address || item.address === 'Đang cập nhật') {
+          try {
+            const vComp = await this.getFromVietQR(item.taxId);
+            if (vComp && vComp.name) {
+              item.name = vComp.name;
+              if (vComp.address) item.address = vComp.address;
+              item.province = db.extractProvince(item.address);
+              item.status = vComp.status || item.status;
+              const newSlug = `${item.taxId}-${this.slugify(vComp.name)}`;
+              item.slug = newSlug;
+              item.url = `/mst/${newSlug}`;
+            }
+          } catch (e) {}
+        }
+        // Auto-save to Turso DB
+        db.saveCompany(item).catch(err => {
+          console.warn('[DB auto-save error]:', err.message);
+        });
       }
 
-      if (items.length === 0) return null;
-
-      try {
-        const firstCompany = await this.getFromVietQR(items[0].taxId);
-        if (firstCompany) {
-          if (items[0].representative) {
-            firstCompany.representative = items[0].representative;
-          }
-          await db.saveCompany(firstCompany);
-          items[0].name = firstCompany.name || items[0].name;
-          items[0].address = firstCompany.address || items[0].address;
-          items[0].representative = firstCompany.representative || items[0].representative || '';
-        }
-      } catch (e) {}
-
-      return {
-        success: true,
-        isDirect: items.length === 1,
-        fromSerper: true,
-        items,
-        currentPage: 1,
-        maxPage: 1,
-        totalFound: items.length
-      };
-    } catch (e) {
-      console.warn('[Serper Error]', e.message);
-      return null;
+      if (items.length > 0) {
+        return {
+          success: true,
+          isDirect: items.length === 1,
+          fromDuckDuckGo: true,
+          items,
+          currentPage: 1,
+          maxPage: 1,
+          totalFound: items.length
+        };
+      }
+    } catch (err) {
+      console.warn('[searchViaDuckDuckGo error]:', err.message);
     }
+    return null;
   }
 
   async search(query, type = 'auto', page = 1) {
@@ -755,7 +881,14 @@ export class MasothueCrawler {
       }
     }
 
-    // --- Priority 1 for Real-time Cloud Fallback: Serper.dev Google API (Active) ---
+    // --- Priority 1: DuckDuckGo Web Search (100% Free, Unlimited, Bypasses Cloudflare) ---
+    const ddgResult = await this.searchViaDuckDuckGo(effectiveQ);
+    if (ddgResult && ddgResult.items && ddgResult.items.length > 0) {
+      this.setCache(cacheKey, ddgResult);
+      return ddgResult;
+    }
+
+    // --- Priority 2 for Real-time Cloud Fallback: Serper.dev Google API (Active) ---
     const serperResult = await this.searchViaSerper(effectiveQ);
     if (serperResult && serperResult.items && serperResult.items.length > 0) {
       this.setCache(cacheKey, serperResult);
