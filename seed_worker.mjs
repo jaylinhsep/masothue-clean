@@ -131,18 +131,18 @@ async function runWorker() {
   let state = loadState();
 
   const serperKey = (process.env.SERPER_API_KEY || process.env.SERPER_KEY || '').trim();
-  if (!serperKey) {
-    console.log(`⚠️  [CHÚ Ý QUAN TRỌNG VỀ SERPER]`);
-    console.log(`    Chưa tìm thấy SERPER_API_KEY trong file .env trên máy tính của bạn.`);
-    console.log(`    Worker sẽ tạm thời nạp Tên + Địa chỉ từ VietQR (Miễn phí 100%).`);
-    console.log(`    -> Để lấy cả Người đại diện & Chi cục thuế, bạn hãy mở file .env và thêm dòng:`);
-    console.log(`       SERPER_API_KEY=key_của_bạn\n`);
-  } else {
+  if (serperKey) {
     console.log(`🔑 [SERPER KEY] Đã nhận diện Serper Key: ${serperKey.slice(0, 8)}... (Khóa an toàn: ${MAX_SERPER_PER_DAY}/ngày)\n`);
+  } else {
+    console.log(`🚀 [CHẾ ĐỘ HOÀN TOÀN MIỄN PHÍ - ZERO COST]`);
+    console.log(`    Chạy độc lập 100% bằng VietQR + Crawler trực tiếp.`);
+    console.log(`    Vĩnh viễn không tốn chi phí, không phụ thuộc Serper credits!\n`);
   }
 
   console.log(`[TRẠNG THÁI] Ngày: ${state.lastDate}`);
-  console.log(`[TRẠNG THÁI] Đã dùng Serper hôm nay: ${state.serperUsedToday} / ${MAX_SERPER_PER_DAY}`);
+  if (serperKey) {
+    console.log(`[TRẠNG THÁI] Đã dùng Serper hôm nay: ${state.serperUsedToday} / ${MAX_SERPER_PER_DAY}`);
+  }
   console.log(`[TRẠNG THÁI] Tổng công ty nạp thành công: ${state.totalSaved}\n`);
 
   let isRunning = true;
@@ -184,7 +184,8 @@ async function runWorker() {
     const taxId = nineDigits + checkDigit;
 
     // Hiển thị tiến độ quét liên tục theo thời gian thực (không để màn hình bị đứng)
-    process.stdout.write(`\r🔍 [Đang quét] MST: ${taxId} | Đã lưu: ${state.totalSaved} | Serper: ${state.serperUsedToday}/${MAX_SERPER_PER_DAY}   `);
+    const extraInfo = serperKey ? `Serper: ${state.serperUsedToday}/${MAX_SERPER_PER_DAY}` : 'Chế độ: Miễn phí 100%';
+    process.stdout.write(`\r🔍 [Đang quét] MST: ${taxId} | Đã lưu: ${state.totalSaved} | ${extraInfo}   `);
 
     // Check if already in DB
     const existing = await db.getCompanyByTaxId(taxId);
