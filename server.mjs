@@ -263,7 +263,9 @@ async function handleCompanyPage(req, res, slug) {
         crawler.getDetail('/' + (company.slug || cleanSlug), true)
           .then(dRes => {
             if (dRes.success && dRes.data && (dRes.data.representative || dRes.data.managedBy)) {
-              db.saveCompany(dRes.data).catch(() => {});
+              db.saveCompany(dRes.data).then(() => {
+                pageCache.delete(cacheKey);
+              }).catch(() => {});
             }
           })
           .catch(() => {});
@@ -301,8 +303,12 @@ async function handleCompanyPage(req, res, slug) {
       byIndustry: relatedIndustry
     }, req.headers.host);
 
-    // Cache the rendered page
-    setCachedPage(cacheKey, html);
+    // Cache the rendered page only if complete, or 30s if missing representative
+    if (company.representative && company.representative.trim().length > 1) {
+      setCachedPage(cacheKey, html, 10 * 60 * 1000);
+    } else {
+      setCachedPage(cacheKey, html, 30 * 1000);
+    }
 
     res.send(html);
   } catch (err) {

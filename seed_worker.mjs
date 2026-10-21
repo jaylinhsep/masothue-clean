@@ -242,7 +242,7 @@ async function runWorker() {
         const serperInfo = await crawler.enrichViaSerper(taxId, vCompany.name);
         state.serperUsedToday++;
 
-        if (serperInfo) {
+        if (serperInfo && (serperInfo.representative || serperInfo.managedBy)) {
           finalCompany = {
             ...finalCompany,
             ...serperInfo,
@@ -252,13 +252,32 @@ async function runWorker() {
           if (serperInfo.managedBy) console.log(`   ✓ Quản lý bởi: ${serperInfo.managedBy}`);
           if (serperInfo.phone) console.log(`   ✓ SĐT: ${serperInfo.phone}`);
         } else {
-          console.log(`   ℹ️ Serper không tìm thấy thông tin bổ sung, giữ nguyên thông tin gốc.`);
+          console.log(`   ℹ️ Serper không có kết quả, chuyển sang nạp trực tiếp qua crawler...`);
         }
       } catch (err) {
         console.warn(`   ⚠️ Lỗi Serper:`, err.message);
       }
-    } else {
-      console.log(`   🛑 [ĐÃ CHẠM TRẦN 2.400 SERPER/NGÀY] Lưu thông tin cơ bản để bảo vệ tài khoản Serper!`);
+    }
+
+    // TẦNG 2B (DỰ PHÒNG HOÀN TOÀN TỰ ĐỘNG):
+    // Nếu Serper hết lượt / không tìm thấy -> Gọi trực tiếp crawler từ IP máy bạn để lấy đầy đủ Người đại diện & SĐT
+    if (!finalCompany.representative || finalCompany.representative.trim().length <= 1) {
+      try {
+        console.log(`   🌐 Đang nạp đầy đủ Người đại diện & SĐT qua crawler...`);
+        const cleanSlug = (finalCompany.slug || '').replace(/^\/?(mst\/)?/, '');
+        const detail = await crawler.getDetail(cleanSlug ? `/${cleanSlug}` : `/${taxId}`, true);
+        if (detail.success && detail.data && (detail.data.representative || detail.data.managedBy)) {
+          finalCompany = {
+            ...finalCompany,
+            ...detail.data
+          };
+          console.log(`   ✓ Người đại diện: ${detail.data.representative || 'Chưa cập nhật'}`);
+          if (detail.data.managedBy) console.log(`   ✓ Quản lý bởi: ${detail.data.managedBy}`);
+          if (detail.data.phone) console.log(`   ✓ SĐT: ${detail.data.phone}`);
+        }
+      } catch (err) {
+        console.warn(`   ⚠️ Lỗi fallback crawler:`, err.message);
+      }
     }
 
     // TẦNG 3: Lưu vào Turso DB
