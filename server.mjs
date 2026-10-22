@@ -574,12 +574,23 @@ app.get('/api/debug-crawler', async (req, res) => {
     if (apiKey && cx) {
       try {
         const t0 = Date.now();
-        const gRes = await crawler.searchViaGoogle(testQ);
+        const testUrl = new URL('https://www.googleapis.com/customsearch/v1');
+        testUrl.searchParams.set('key', apiKey);
+        testUrl.searchParams.set('cx', cx);
+        testUrl.searchParams.set('q', testQ);
+        testUrl.searchParams.set('num', '5');
+
+        const gHttpRes = await fetch(testUrl.toString(), { headers: { 'Accept': 'application/json' } });
+        const gStatus = gHttpRes.status;
+        const gJson = await gHttpRes.json();
+
         diag.googleSearchTest = {
           time: Date.now() - t0,
-          success: Boolean(gRes && gRes.items && gRes.items.length > 0),
-          itemsCount: gRes?.items?.length || 0,
-          sample: gRes?.items?.slice(0, 2)
+          httpStatus: gStatus,
+          error: gJson.error || null,
+          totalResults: gJson.searchInformation?.totalResults || '0',
+          itemsCount: gJson.items?.length || 0,
+          sampleTitles: (gJson.items || []).map(i => i.title).slice(0, 3)
         };
       } catch (err) {
         diag.googleSearchTest = { error: err.message };
