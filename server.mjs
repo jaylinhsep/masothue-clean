@@ -533,6 +533,30 @@ app.get('/api/debug-crawler', async (req, res) => {
     diag.hasBraveKey = Boolean(braveKey);
     diag.hasTavilyKey = Boolean(tavilyKey);
 
+    // List all non-sensitive environment variable names to diagnose configuration
+    diag.envKeyNames = Object.keys(process.env).filter(k => 
+      !k.startsWith('npm_') && !k.startsWith('PATH') && !k.startsWith('LS_') && !k.startsWith('NODE_')
+    );
+
+    const testQ = req.query.q || 'thái anh';
+    diag.testQuery = testQ;
+
+    // Test Google Search API if configured
+    if (apiKey && cx) {
+      try {
+        const t0 = Date.now();
+        const gRes = await crawler.searchViaGoogle(testQ);
+        diag.googleSearchTest = {
+          time: Date.now() - t0,
+          success: Boolean(gRes && gRes.items && gRes.items.length > 0),
+          itemsCount: gRes?.items?.length || 0,
+          sample: gRes?.items?.slice(0, 2)
+        };
+      } catch (err) {
+        diag.googleSearchTest = { error: err.message };
+      }
+    }
+
     // Test Provider 1: DuckDuckGo HTML
     try {
       const t0 = Date.now();
