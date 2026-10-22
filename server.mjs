@@ -528,22 +528,30 @@ app.get('/api/debug-crawler', async (req, res) => {
     diag.keyPrefix = apiKey ? apiKey.slice(0, 6) + '...' : null;
     diag.cxPreview = cx ? cx.slice(0, 8) + '...' : null;
 
-    if (apiKey && cx) {
-      const searchUrl = new URL('https://www.googleapis.com/customsearch/v1');
-      searchUrl.searchParams.set('key', apiKey);
-      searchUrl.searchParams.set('cx', cx);
-      searchUrl.searchParams.set('q', 'huy hoàng');
-      searchUrl.searchParams.set('num', '5');
+    const testQ = req.query.q || 'nội thất hoàng anh gia lai kon tum';
+    diag.testQuery = testQ;
 
-      const gRes = await fetch(searchUrl.toString(), {
-        headers: { 'Accept': 'application/json' }
+    try {
+      const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(testQ.trim() + ' mã số thuế')}`;
+      const res = await gotScraping({
+        url: searchUrl,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Referer': 'https://html.duckduckgo.com/'
+        },
+        timeout: { request: 6500 }
       });
-      diag.googleHttpStatus = gRes.status;
-      const gText = await gRes.text();
-      try {
-        diag.googleJson = JSON.parse(gText);
-      } catch (e) {
-        diag.googleRawText = gText.slice(0, 500);
+      diag.ddgStatus = res.statusCode;
+      diag.ddgHeaders = res.headers;
+      diag.ddgBodyPreview = (res.body || '').slice(0, 1000);
+      diag.ddgResult = await crawler.searchViaDuckDuckGo(testQ);
+    } catch (ddgErr) {
+      diag.ddgError = ddgErr.message;
+      diag.ddgStatusCode = ddgErr.response ? ddgErr.response.statusCode : null;
+      if (ddgErr.response) {
+        diag.ddgErrorBody = (ddgErr.response.body || '').slice(0, 1000);
       }
     }
 
