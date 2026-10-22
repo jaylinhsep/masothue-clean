@@ -528,31 +528,69 @@ app.get('/api/debug-crawler', async (req, res) => {
     diag.keyPrefix = apiKey ? apiKey.slice(0, 6) + '...' : null;
     diag.cxPreview = cx ? cx.slice(0, 8) + '...' : null;
 
-    const testQ = req.query.q || 'nội thất hoàng anh gia lai kon tum';
+    const testQ = req.query.q || 'SỮA TH';
     diag.testQuery = testQ;
 
+    // Test Provider 1: DuckDuckGo HTML
     try {
-      const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(testQ.trim() + ' mã số thuế')}`;
-      const res = await gotScraping({
-        url: searchUrl,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-          'Referer': 'https://html.duckduckgo.com/'
-        },
-        timeout: { request: 6500 }
+      const t0 = Date.now();
+      const r1 = await gotScraping({
+        url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(testQ + ' mã số thuế')}`,
+        timeout: { request: 3000 }
       });
-      diag.ddgStatus = res.statusCode;
-      diag.ddgHeaders = res.headers;
-      diag.ddgBodyPreview = (res.body || '').slice(0, 1000);
-      diag.ddgResult = await crawler.searchViaDuckDuckGo(testQ);
-    } catch (ddgErr) {
-      diag.ddgError = ddgErr.message;
-      diag.ddgStatusCode = ddgErr.response ? ddgErr.response.statusCode : null;
-      if (ddgErr.response) {
-        diag.ddgErrorBody = (ddgErr.response.body || '').slice(0, 1000);
-      }
+      diag.ddgHtml = { status: r1.statusCode, time: Date.now() - t0, len: r1.body.length };
+    } catch (e) {
+      diag.ddgHtml = { error: e.message };
+    }
+
+    // Test Provider 2: DuckDuckGo Lite (POST form)
+    try {
+      const t0 = Date.now();
+      const r2 = await gotScraping({
+        url: 'https://lite.duckduckgo.com/lite/',
+        method: 'POST',
+        form: { q: testQ + ' mã số thuế' },
+        timeout: { request: 3000 }
+      });
+      diag.ddgLite = { status: r2.statusCode, time: Date.now() - t0, len: r2.body.length, preview: r2.body.slice(0, 300) };
+    } catch (e) {
+      diag.ddgLite = { error: e.message };
+    }
+
+    // Test Provider 3: Bing
+    try {
+      const t0 = Date.now();
+      const r3 = await gotScraping({
+        url: `https://www.bing.com/search?q=${encodeURIComponent(testQ + ' mã số thuế')}`,
+        timeout: { request: 3000 }
+      });
+      diag.bing = { status: r3.statusCode, time: Date.now() - t0, len: r3.body.length };
+    } catch (e) {
+      diag.bing = { error: e.message };
+    }
+
+    // Test Provider 4: Yahoo
+    try {
+      const t0 = Date.now();
+      const r4 = await gotScraping({
+        url: `https://search.yahoo.com/search?p=${encodeURIComponent(testQ + ' mã số thuế')}`,
+        timeout: { request: 3000 }
+      });
+      diag.yahoo = { status: r4.statusCode, time: Date.now() - t0, len: r4.body.length };
+    } catch (e) {
+      diag.yahoo = { error: e.message };
+    }
+
+    // Test Provider 5: Google Mobile HTML
+    try {
+      const t0 = Date.now();
+      const r5 = await gotScraping({
+        url: `https://www.google.com/search?q=${encodeURIComponent(testQ + ' mã số thuế')}&hl=vi&gl=vn`,
+        timeout: { request: 3000 }
+      });
+      diag.google = { status: r5.statusCode, time: Date.now() - t0, len: r5.body.length };
+    } catch (e) {
+      diag.google = { error: e.message };
     }
 
     res.json(diag);
