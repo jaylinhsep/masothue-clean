@@ -1087,7 +1087,41 @@ export class MasothueCrawler {
       }
     }
 
-    // --- Priority 1: Google Custom Search API (Official, lightning fast 50ms, 100 free/day) ---
+    // --- Priority 1: Tavily AI Search (1,000 Free searches/month forever, No Credit Card) ---
+    const tavilyResult = await this.searchViaTavily(effectiveQ);
+    if (tavilyResult && tavilyResult.items && tavilyResult.items.length > 0) {
+      if (dbItems && dbItems.length > 0) {
+        const seenTax = new Set(tavilyResult.items.map(i => i.taxId));
+        for (const item of dbItems) {
+          if (!seenTax.has(item.taxId)) {
+            tavilyResult.items.push(item);
+            seenTax.add(item.taxId);
+          }
+        }
+        tavilyResult.totalFound = tavilyResult.items.length;
+      }
+      this.setCache(cacheKey, tavilyResult);
+      return tavilyResult;
+    }
+
+    // --- Priority 2: Serper.dev Google API (2,500 Free searches) ---
+    const serperResult = await this.searchViaSerper(effectiveQ);
+    if (serperResult && serperResult.items && serperResult.items.length > 0) {
+      if (dbItems && dbItems.length > 0) {
+        const seenTax = new Set(serperResult.items.map(i => i.taxId));
+        for (const item of dbItems) {
+          if (!seenTax.has(item.taxId)) {
+            serperResult.items.push(item);
+            seenTax.add(item.taxId);
+          }
+        }
+        serperResult.totalFound = serperResult.items.length;
+      }
+      this.setCache(cacheKey, serperResult);
+      return serperResult;
+    }
+
+    // --- Priority 3: Google Custom Search API (If older project with access) ---
     const googleResult = await this.searchViaGoogle(effectiveQ);
     if (googleResult && googleResult.items && googleResult.items.length > 0) {
       if (dbItems && dbItems.length > 0) {
@@ -1104,25 +1138,11 @@ export class MasothueCrawler {
       return googleResult;
     }
 
-    // --- Fallback 2: Brave Search API (2,000 Free searches/month forever) ---
+    // --- Priority 4: Brave Search API ---
     const braveResult = await this.searchViaBrave(effectiveQ);
     if (braveResult && braveResult.items && braveResult.items.length > 0) {
       this.setCache(cacheKey, braveResult);
       return braveResult;
-    }
-
-    // --- Fallback 3: Tavily Search API (1,000 Free searches/month forever) ---
-    const tavilyResult = await this.searchViaTavily(effectiveQ);
-    if (tavilyResult && tavilyResult.items && tavilyResult.items.length > 0) {
-      this.setCache(cacheKey, tavilyResult);
-      return tavilyResult;
-    }
-
-    // --- Fallback 4: Serper.dev Google API ---
-    const serperResult = await this.searchViaSerper(effectiveQ);
-    if (serperResult && serperResult.items && serperResult.items.length > 0) {
-      this.setCache(cacheKey, serperResult);
-      return serperResult;
     }
 
     // --- Fallback 5: DuckDuckGo Web Search (100% Free, for local / residential IPs) ---
