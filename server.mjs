@@ -512,6 +512,35 @@ app.get('/api/detail', async (req, res) => {
   }
 });
 
+// API: Debug Raw Google CSE
+app.get('/api/debug-google', async (req, res) => {
+  try {
+    const apiKey = (process.env.GOOGLE_SEARCH_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_KEY || '').trim();
+    const cx = (process.env.GOOGLE_SEARCH_CX || process.env.GOOGLE_CX || process.env.SEARCH_ENGINE_ID || process.env.GOOGLE_SEARCH_ENGINE_ID || '').trim();
+    const q = req.query.q || 'thái anh';
+
+    if (!apiKey || !cx) {
+      return res.json({ error: 'Missing apiKey or cx', hasKey: Boolean(apiKey), hasCx: Boolean(cx) });
+    }
+
+    const searchUrl = new URL('https://www.googleapis.com/customsearch/v1');
+    searchUrl.searchParams.set('key', apiKey);
+    searchUrl.searchParams.set('cx', cx);
+    searchUrl.searchParams.set('q', q);
+    searchUrl.searchParams.set('num', '10');
+
+    const response = await fetch(searchUrl.toString(), {
+      headers: { 'Accept': 'application/json' }
+    });
+
+    const status = response.status;
+    const body = await response.json();
+    res.json({ status, query: q, totalResults: body.searchInformation?.totalResults, itemsCount: body.items?.length || 0, error: body.error, raw: body });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // API: Debug Crawler connection
 app.get('/api/debug-crawler', async (req, res) => {
   const diag = {};

@@ -148,7 +148,25 @@ export class MasothueCrawler {
         return null;
       }
 
-      const data = await res.json();
+      let data = await res.json();
+      if (!data.items || data.items.length === 0) {
+        // Fallback 1B: Try query + ' mã số thuế' in case CSE searches full web
+        const searchUrl2 = new URL('https://www.googleapis.com/customsearch/v1');
+        searchUrl2.searchParams.set('key', apiKey.trim());
+        searchUrl2.searchParams.set('cx', cx.trim());
+        searchUrl2.searchParams.set('q', `${query.trim()} mã số thuế`);
+        searchUrl2.searchParams.set('num', '10');
+        try {
+          const res2 = await fetch(searchUrl2.toString(), { headers: { 'Accept': 'application/json' } });
+          if (res2.ok) {
+            const data2 = await res2.json();
+            if (data2.items && data2.items.length > 0) {
+              data = data2;
+            }
+          }
+        } catch (e) {}
+      }
+
       if (!data.items || data.items.length === 0) {
         return null;
       }
@@ -893,7 +911,14 @@ export class MasothueCrawler {
 
     // 2. Search in Indexed Database (Turso Cloud / SQLite) - Super fast!
     const dbItems = await db.searchCompanies(q, 20);
-    if (dbItems && dbItems.length > 0) {
+    const qSlug = this.slugify(q);
+    const directNameMatches = (dbItems || []).filter(item => {
+      const nSlug = this.slugify(item.name || '');
+      return nSlug.includes(qSlug);
+    });
+
+    // If we have solid company name matches in DB (at least 2), return immediately (<30ms)!
+    if (directNameMatches.length >= 2) {
       return {
         success: true,
         isDirect: dbItems.length === 1,
@@ -1062,42 +1087,52 @@ export class MasothueCrawler {
       }
     }
 
-    // --- Fallback 1: DuckDuckGo Web Search (100% Free, Unlimited, for residential / unblocked IPs) ---
-    const ddgResult = await this.searchViaDuckDuckGo(effectiveQ);
-    if (ddgResult && ddgResult.items && ddgResult.items.length > 0) {
-      this.setCache(cacheKey, ddgResult);
-      return ddgResult;
-    }
-
-    // --- Fallback 2: Google Custom Search API (100 Free searches/day forever) ---
+    // --- Priority 1: Google Custom Search API (Official, lightning fast 50ms, 100 free/day) ---
     const googleResult = await this.searchViaGoogle(effectiveQ);
     if (googleResult && googleResult.items && googleResult.items.length > 0) {
+      if (dbItems && dbItems.length > 0) {
+        const seenTax = new Set(googleResult.items.map(i => i.taxId));
+        for (const item of dbItems) {
+          if (!seenTax.has(item.taxId)) {
+            googleResult.items.push(item);
+            seenTax.add(item.taxId);
+          }
+        }
+        googleResult.totalFound = googleResult.items.length;
+      }
       this.setCache(cacheKey, googleResult);
       return googleResult;
     }
 
-    // --- Fallback 3: Brave Search API (2,000 Free searches/month forever) ---
+    // --- Fallback 2: Brave Search API (2,000 Free searches/month forever) ---
     const braveResult = await this.searchViaBrave(effectiveQ);
     if (braveResult && braveResult.items && braveResult.items.length > 0) {
       this.setCache(cacheKey, braveResult);
       return braveResult;
     }
 
-    // --- Fallback 4: Tavily Search API (1,000 Free searches/month forever) ---
+    // --- Fallback 3: Tavily Search API (1,000 Free searches/month forever) ---
     const tavilyResult = await this.searchViaTavily(effectiveQ);
     if (tavilyResult && tavilyResult.items && tavilyResult.items.length > 0) {
       this.setCache(cacheKey, tavilyResult);
       return tavilyResult;
     }
 
-    // --- Fallback 5: Serper.dev Google API ---
+    // --- Fallback 4: Serper.dev Google API ---
     const serperResult = await this.searchViaSerper(effectiveQ);
     if (serperResult && serperResult.items && serperResult.items.length > 0) {
       this.setCache(cacheKey, serperResult);
       return serperResult;
     }
 
-    // --- FALLBACK 4: If query contains tax digits, try VietQR ---
+    // --- Fallback 5: DuckDuckGo Web Search (100% Free, for local / residential IPs) ---
+    const ddgResult = await this.searchViaDuckDuckGo(effectiveQ);
+    if (ddgResult && ddgResult.items && ddgResult.items.length > 0) {
+      this.setCache(cacheKey, ddgResult);
+      return ddgResult;
+    }
+
+    // --- FALLBACK 6: If query contains tax digits, try VietQR ---
     const cleanTaxDigits = q.replace(/\D/g, '');
     if (cleanTaxDigits.length >= 10) {
       const vFallback = await this.getFromVietQR(cleanTaxDigits.slice(0, 10));
@@ -1120,6 +1155,19 @@ export class MasothueCrawler {
           maxPage: 1
         };
       }
+    }
+
+    // --- FALLBACK 7: Return DB representative matches if external search found nothing ---
+    if (dbItems && dbItems.length > 0) {
+      return {
+        success: true,
+        isDirect: false,
+        fromDb: true,
+        items: dbItems,
+        currentPage: 1,
+        maxPage: 1,
+        totalFound: dbItems.length
+      };
     }
 
     return {
