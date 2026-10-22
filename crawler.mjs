@@ -154,26 +154,30 @@ export class MasothueCrawler {
       }
 
       const items = [];
+      const seenTax = new Set();
       for (const item of data.items) {
         const link = item.link || '';
-        const taxMatch = link.match(/(\d{10}(-\d{3})?)/);
+        const fullText = `${item.title || ''} ${item.snippet || ''} ${link}`;
+        const taxMatch = fullText.match(/\b(0[1-9]\d{8}|[1-9]\d{9})(?:-\d{3})?\b/);
         if (taxMatch) {
           const taxId = taxMatch[1];
+          if (seenTax.has(taxId)) continue;
+          seenTax.add(taxId);
+
           let cleanName = (item.title || '')
-            .replace(/-\s*MaSoThue/i, '')
-            .replace(/^\d{10}(-\d{3})?\s*-\s*/, '')
+            .replace(/-\s*MaSoThue.*$/i, '')
+            .replace(/-\s*Mã số thuế.*$/i, '')
+            .replace(/-\s*Thông tin doanh nghiệp.*$/i, '')
+            .replace(/^\d{10}(-\d{3})?\s*[-–—:]\s*/, '')
             .trim();
 
-          let path = link.replace(/https?:\/\/(www\.)?masothue\.com/, '');
-          if (!path.startsWith('/')) path = '/' + path;
-
           let rep = '';
-          const repMatch = (item.snippet || '').match(/(?:Đại diện pháp luật|Người đại diện|Đại diện):\s*([^·,–\n\-]+)/i);
+          const repMatch = (item.snippet || '').match(/(?:Đại diện pháp luật|Người đại diện|Đại diện)[:\s]+([^·,–\n\-]+)/i);
           if (repMatch) rep = repMatch[1].trim();
 
           let address = '';
           if (item.snippet) {
-            const addrMatch = item.snippet.match(/(?:Địa chỉ|Địa chỉ thuế):\s*([^·\n]+)/i);
+            const addrMatch = item.snippet.match(/(?:Địa chỉ|Địa chỉ thuế|Trụ sở)[:\s]+([^·\n]+)/i);
             if (addrMatch) {
               address = addrMatch[1].trim();
             } else {
@@ -186,31 +190,39 @@ export class MasothueCrawler {
             }
           }
 
+          const slug = `${taxId}-${this.slugify(cleanName)}`;
           items.push({
             name: cleanName,
-            url: path,
+            slug,
+            url: `/mst/${slug}`,
             taxId,
             representative: rep,
-            address: address || 'Toàn quốc'
+            address: address || 'Toàn quốc',
+            province: db.extractProvince(address || ''),
+            status: 'Đang hoạt động'
           });
         }
       }
 
       if (items.length === 0) return null;
 
-      // Enhance the 1st match with official government data from VietQR & save to DB!
-      try {
-        const firstCompany = await this.getFromVietQR(items[0].taxId);
-        if (firstCompany) {
-          if (items[0].representative) {
-            firstCompany.representative = items[0].representative;
+      // Enhance top matches with official government data from VietQR & save to DB!
+      for (let i = 0; i < Math.min(items.length, 3); i++) {
+        try {
+          const v = await this.getFromVietQR(items[i].taxId);
+          if (v && v.taxId && v.name) {
+            items[i].name = v.name;
+            items[i].address = v.address || items[i].address;
+            items[i].status = v.status || items[i].status;
+            if (items[i].representative) {
+              v.representative = items[i].representative;
+            }
+            await db.saveCompany(v);
+          } else {
+            await db.saveCompany(items[i]);
           }
-          await db.saveCompany(firstCompany);
-          items[0].name = firstCompany.name || items[0].name;
-          items[0].address = firstCompany.address || items[0].address;
-          items[0].representative = firstCompany.representative || items[0].representative || '';
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
 
       return {
         success: true,
