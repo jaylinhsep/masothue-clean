@@ -561,10 +561,11 @@ app.get('/api/debug-crawler', async (req, res) => {
     try {
       const t0 = Date.now();
       const r3 = await gotScraping({
-        url: `https://www.bing.com/search?q=${encodeURIComponent(testQ + ' mã số thuế')}`,
-        timeout: { request: 3000 }
+        url: `https://www.bing.com/search?q=${encodeURIComponent(testQ + ' mã số thuế')}&setmkt=vi-VN&setlang=vi`,
+        timeout: { request: 4000 }
       });
-      diag.bing = { status: r3.statusCode, time: Date.now() - t0, len: r3.body.length };
+      const bMsts = [...r3.body.matchAll(/\b(0[1-9]\d{8}|[1-9]\d{9})(?:-\d{3})?\b/g)].map(m => m[0]);
+      diag.bing = { status: r3.statusCode, time: Date.now() - t0, len: r3.body.length, msts: [...new Set(bMsts)].slice(0, 5) };
     } catch (e) {
       diag.bing = { error: e.message };
     }
@@ -574,9 +575,10 @@ app.get('/api/debug-crawler', async (req, res) => {
       const t0 = Date.now();
       const r4 = await gotScraping({
         url: `https://search.yahoo.com/search?p=${encodeURIComponent(testQ + ' mã số thuế')}`,
-        timeout: { request: 3000 }
+        timeout: { request: 4000 }
       });
-      diag.yahoo = { status: r4.statusCode, time: Date.now() - t0, len: r4.body.length };
+      const yMsts = [...r4.body.matchAll(/\b(0[1-9]\d{8}|[1-9]\d{9})(?:-\d{3})?\b/g)].map(m => m[0]);
+      diag.yahoo = { status: r4.statusCode, time: Date.now() - t0, len: r4.body.length, msts: [...new Set(yMsts)].slice(0, 5) };
     } catch (e) {
       diag.yahoo = { error: e.message };
     }
@@ -586,9 +588,10 @@ app.get('/api/debug-crawler', async (req, res) => {
       const t0 = Date.now();
       const r5 = await gotScraping({
         url: `https://www.google.com/search?q=${encodeURIComponent(testQ + ' mã số thuế')}&hl=vi&gl=vn`,
-        timeout: { request: 3000 }
+        timeout: { request: 4000 }
       });
-      diag.google = { status: r5.statusCode, time: Date.now() - t0, len: r5.body.length };
+      const gMsts = [...r5.body.matchAll(/\b(0[1-9]\d{8}|[1-9]\d{9})(?:-\d{3})?\b/g)].map(m => m[0]);
+      diag.google = { status: r5.statusCode, time: Date.now() - t0, len: r5.body.length, msts: [...new Set(gMsts)].slice(0, 5) };
     } catch (e) {
       diag.google = { error: e.message };
     }
