@@ -70,7 +70,7 @@ export class MasothueCrawler {
   }
 
   // --- Official VietQR Business API (Direct from Cục Thuế / gdt.gov.vn) ---
-  async getFromVietQR(taxId) {
+  async getFromVietQR(taxId, retries = 1) {
     const cleanId = (taxId || '').trim();
     if (!cleanId || !/^\d{10}(-\d{3})?$/.test(cleanId)) return null;
 
@@ -81,16 +81,22 @@ export class MasothueCrawler {
         }
       });
       if (res.status === 429) {
-        const retryAfter = parseInt(res.headers.get('retry-after'), 10) || 60;
-        return { isRateLimited: true, retryAfter };
+        if (retries > 0) {
+          const retryAfter = Math.min(parseInt(res.headers.get('retry-after'), 10) || 1, 2);
+          await new Promise(r => setTimeout(r, retryAfter * 1000));
+          return this.getFromVietQR(taxId, retries - 1);
+        }
+        return null;
       }
       if (!res.ok) return null;
       const json = await res.json();
       if (json && json.code === '00' && json.data) {
         const d = json.data;
+        if (!d.id || !d.name) return null;
         const slug = `${d.id}-${this.slugify(d.name)}`;
         const company = {
           name: d.name,
+          slug,
           url: `/mst/${slug}`,
           taxId: d.id,
           taxAddress: d.address || '',
@@ -219,6 +225,169 @@ export class MasothueCrawler {
       console.warn('[Google Search Error]', err.message);
       return null;
     }
+  }
+
+  // --- Brave Search API (2,000 Free Searches/Month Forever) ---
+  async searchViaBrave(query) {
+    const apiKey = (process.env.BRAVE_SEARCH_API_KEY || process.env.BRAVE_API_KEY || '').trim();
+    if (!apiKey || !query || !query.trim()) return null;
+
+    try {
+      const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query.trim() + ' mã số thuế')}&country=vn&search_lang=vi&count=10`;
+      const res = await fetch(searchUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip',
+          'X-Subscription-Token': apiKey
+        }
+      });
+      if (!res.ok) {
+        console.warn(`[Brave Search API] HTTP ${res.status}`);
+        return null;
+      }
+      const data = await res.json();
+      if (!data.web || !data.web.results || data.web.results.length === 0) return null;
+
+      const items = [];
+      const seen = new Set();
+      for (const item of data.web.results) {
+        const fullText = `${item.title || ''} ${item.description || ''} ${item.url || ''}`;
+        const taxMatch = fullText.match(/\b(0[1-9]\d{8}|[1-9]\d{9})(?:-\d{3})?\b/);
+        if (!taxMatch) continue;
+        const taxId = taxMatch[1];
+        if (seen.has(taxId)) continue;
+        seen.add(taxId);
+
+        let cleanName = (item.title || '')
+          .replace(/-\s*MaSoThue.*$/i, '')
+          .replace(/-\s*Mã số thuế.*$/i, '')
+          .replace(/^\d{10}(-\d{3})?\s*[-–—:]\s*/, '')
+          .trim();
+
+        const slug = `${taxId}-${this.slugify(cleanName)}`;
+        const comp = {
+          name: cleanName,
+          slug,
+          url: `/mst/${slug}`,
+          taxId,
+          representative: '',
+          address: item.description || 'Đang cập nhật',
+          province: db.extractProvince(item.description || ''),
+          status: 'Đang hoạt động'
+        };
+        items.push(comp);
+      }
+
+      for (let i = 0; i < Math.min(items.length, 3); i++) {
+        try {
+          const v = await this.getFromVietQR(items[i].taxId);
+          if (v && v.taxId && v.name) {
+            items[i].name = v.name;
+            items[i].address = v.address || items[i].address;
+            items[i].status = v.status || items[i].status;
+            await db.saveCompany(v);
+          } else {
+            await db.saveCompany(items[i]);
+          }
+        } catch (e) {}
+      }
+
+      if (items.length > 0) {
+        return {
+          success: true,
+          isDirect: items.length === 1,
+          fromBrave: true,
+          items,
+          currentPage: 1,
+          maxPage: 1,
+          totalFound: items.length
+        };
+      }
+    } catch (err) {
+      console.warn('[Brave Search Error]', err.message);
+    }
+    return null;
+  }
+
+  // --- Tavily Search API (1,000 Free Searches/Month Forever) ---
+  async searchViaTavily(query) {
+    const apiKey = (process.env.TAVILY_API_KEY || '').trim();
+    if (!apiKey || !query || !query.trim()) return null;
+
+    try {
+      const res = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: apiKey,
+          query: `${query.trim()} mã số thuế`,
+          search_depth: 'basic',
+          max_results: 10
+        })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data.results || data.results.length === 0) return null;
+
+      const items = [];
+      const seen = new Set();
+      for (const item of data.results) {
+        const fullText = `${item.title || ''} ${item.content || ''} ${item.url || ''}`;
+        const taxMatch = fullText.match(/\b(0[1-9]\d{8}|[1-9]\d{9})(?:-\d{3})?\b/);
+        if (!taxMatch) continue;
+        const taxId = taxMatch[1];
+        if (seen.has(taxId)) continue;
+        seen.add(taxId);
+
+        let cleanName = (item.title || '')
+          .replace(/-\s*MaSoThue.*$/i, '')
+          .replace(/-\s*Mã số thuế.*$/i, '')
+          .replace(/^\d{10}(-\d{3})?\s*[-–—:]\s*/, '')
+          .trim();
+
+        const slug = `${taxId}-${this.slugify(cleanName)}`;
+        const comp = {
+          name: cleanName,
+          slug,
+          url: `/mst/${slug}`,
+          taxId,
+          representative: '',
+          address: item.content ? item.content.slice(0, 150) : 'Đang cập nhật',
+          province: db.extractProvince(item.content || ''),
+          status: 'Đang hoạt động'
+        };
+        items.push(comp);
+      }
+
+      for (let i = 0; i < Math.min(items.length, 3); i++) {
+        try {
+          const v = await this.getFromVietQR(items[i].taxId);
+          if (v && v.taxId && v.name) {
+            items[i].name = v.name;
+            items[i].address = v.address || items[i].address;
+            items[i].status = v.status || items[i].status;
+            await db.saveCompany(v);
+          } else {
+            await db.saveCompany(items[i]);
+          }
+        } catch (e) {}
+      }
+
+      if (items.length > 0) {
+        return {
+          success: true,
+          isDirect: items.length === 1,
+          fromTavily: true,
+          items,
+          currentPage: 1,
+          maxPage: 1,
+          totalFound: items.length
+        };
+      }
+    } catch (err) {
+      console.warn('[Tavily Search Error]', err.message);
+    }
+    return null;
   }
 
   // --- Enrich Tax ID via Serper Google Snippet (Bypasses Cloudflare 100%) ---
@@ -659,7 +828,7 @@ export class MasothueCrawler {
 
       // Priority 2: If not in DB, fetch from VietQR and automatically enrich full details!
       const vCompany = await this.getFromVietQR(q);
-      if (vCompany) {
+      if (vCompany && vCompany.taxId && vCompany.name) {
         // Automatically enrich via slug or Serper to get representative, phone, startDate, tax office
         const slug = `${vCompany.taxId}-${this.slugify(vCompany.name)}`;
         let enrichedData = { ...vCompany };
@@ -881,32 +1050,46 @@ export class MasothueCrawler {
       }
     }
 
-    // --- Priority 1: DuckDuckGo Web Search (100% Free, Unlimited, Bypasses Cloudflare) ---
+    // --- Fallback 1: DuckDuckGo Web Search (100% Free, Unlimited, for residential / unblocked IPs) ---
     const ddgResult = await this.searchViaDuckDuckGo(effectiveQ);
     if (ddgResult && ddgResult.items && ddgResult.items.length > 0) {
       this.setCache(cacheKey, ddgResult);
       return ddgResult;
     }
 
-    // --- Priority 2 for Real-time Cloud Fallback: Serper.dev Google API (Active) ---
-    const serperResult = await this.searchViaSerper(effectiveQ);
-    if (serperResult && serperResult.items && serperResult.items.length > 0) {
-      this.setCache(cacheKey, serperResult);
-      return serperResult;
-    }
-
-    // --- Priority 2: Real-time Google Custom Search API ---
+    // --- Fallback 2: Google Custom Search API (100 Free searches/day forever) ---
     const googleResult = await this.searchViaGoogle(effectiveQ);
     if (googleResult && googleResult.items && googleResult.items.length > 0) {
       this.setCache(cacheKey, googleResult);
       return googleResult;
     }
 
+    // --- Fallback 3: Brave Search API (2,000 Free searches/month forever) ---
+    const braveResult = await this.searchViaBrave(effectiveQ);
+    if (braveResult && braveResult.items && braveResult.items.length > 0) {
+      this.setCache(cacheKey, braveResult);
+      return braveResult;
+    }
+
+    // --- Fallback 4: Tavily Search API (1,000 Free searches/month forever) ---
+    const tavilyResult = await this.searchViaTavily(effectiveQ);
+    if (tavilyResult && tavilyResult.items && tavilyResult.items.length > 0) {
+      this.setCache(cacheKey, tavilyResult);
+      return tavilyResult;
+    }
+
+    // --- Fallback 5: Serper.dev Google API ---
+    const serperResult = await this.searchViaSerper(effectiveQ);
+    if (serperResult && serperResult.items && serperResult.items.length > 0) {
+      this.setCache(cacheKey, serperResult);
+      return serperResult;
+    }
+
     // --- FALLBACK 4: If query contains tax digits, try VietQR ---
     const cleanTaxDigits = q.replace(/\D/g, '');
     if (cleanTaxDigits.length >= 10) {
       const vFallback = await this.getFromVietQR(cleanTaxDigits.slice(0, 10));
-      if (vFallback) {
+      if (vFallback && vFallback.taxId && vFallback.name) {
         await db.saveCompany(vFallback);
         return {
           success: true,
@@ -971,7 +1154,7 @@ export class MasothueCrawler {
         }
         if (taxMatch) {
           const vCompany = await this.getFromVietQR(taxMatch[1]);
-          if (vCompany) {
+          if (vCompany && vCompany.taxId && vCompany.name) {
             const serperInfo = await this.enrichViaSerper(taxMatch[1], vCompany.name);
             const finalCompany = serperInfo ? {
               ...vCompany,
@@ -994,7 +1177,7 @@ export class MasothueCrawler {
         }
         if (taxMatch) {
           const vCompany = await this.getFromVietQR(taxMatch[1]);
-          if (vCompany) {
+          if (vCompany && vCompany.taxId && vCompany.name) {
             const serperInfo = await this.enrichViaSerper(taxMatch[1], vCompany.name);
             const finalCompany = serperInfo ? {
               ...vCompany,
@@ -1091,7 +1274,7 @@ export class MasothueCrawler {
       }
       if (taxMatch) {
         const vCompany = await this.getFromVietQR(taxMatch[1]);
-        if (vCompany) {
+        if (vCompany && vCompany.taxId && vCompany.name) {
           const serperInfo = await this.enrichViaSerper(taxMatch[1], vCompany.name);
           const finalCompany = serperInfo ? {
             ...vCompany,

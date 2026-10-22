@@ -528,8 +528,10 @@ app.get('/api/debug-crawler', async (req, res) => {
     diag.keyPrefix = apiKey ? apiKey.slice(0, 6) + '...' : null;
     diag.cxPreview = cx ? cx.slice(0, 8) + '...' : null;
 
-    const testQ = req.query.q || 'SỮA TH';
-    diag.testQuery = testQ;
+    const braveKey = (process.env.BRAVE_SEARCH_API_KEY || process.env.BRAVE_API_KEY || '').trim();
+    const tavilyKey = (process.env.TAVILY_API_KEY || '').trim();
+    diag.hasBraveKey = Boolean(braveKey);
+    diag.hasTavilyKey = Boolean(tavilyKey);
 
     // Test Provider 1: DuckDuckGo HTML
     try {
