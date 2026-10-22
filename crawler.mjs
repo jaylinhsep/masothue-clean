@@ -375,13 +375,32 @@ export class MasothueCrawler {
           .replace(/^\d{10}(-\d{3})?\s*[-–—:]\s*/, '')
           .trim();
 
+        let rep = '';
+        const repMatch = (item.content || '').match(/(?:Người đại diện theo pháp luật|Đại diện theo pháp luật|Người đại diện pháp luật|Đại diện pháp luật|Người đại diện)[:\s,]+([^;·–\n]+)/i);
+        if (repMatch) {
+          let r = repMatch[1].trim()
+            .replace(/^(theo pháp luật|theo uỷ quyền)[\s.:,-]+/i, '')
+            .replace(/\s*(Ngoài ra.*|\d{10}.*|Ẩn số điện thoại.*|Chức vụ.*)$/i, '')
+            .replace(/^[,\-–\s.:]+|[,\-–\s.:]+$/g, '')
+            .trim();
+          const isCompanyWord = /(công ty|tnhh|cổ phần|chi nhánh|văn phòng|tập đoàn|doanh nghiệp)/i.test(r);
+          if (!isCompanyWord && r.length >= 2 && r.length <= 60 && !r.includes('http')) {
+            rep = r;
+          }
+        }
+
+        let phone = '';
+        const phoneMatch = (item.content || '').match(/(?:Điện thoại|SĐT|Phone)[:\s,]+([0-9\s.\-+]{8,15})/i);
+        if (phoneMatch) phone = phoneMatch[1].trim();
+
         const slug = `${taxId}-${this.slugify(cleanName)}`;
         const comp = {
           name: cleanName,
           slug,
           url: `/mst/${slug}`,
           taxId,
-          representative: '',
+          representative: rep,
+          phone,
           address: item.content ? item.content.slice(0, 150) : 'Đang cập nhật',
           province: db.extractProvince(item.content || ''),
           status: 'Đang hoạt động'
@@ -396,6 +415,8 @@ export class MasothueCrawler {
             items[i].name = v.name;
             items[i].address = v.address || items[i].address;
             items[i].status = v.status || items[i].status;
+            if (items[i].representative) v.representative = items[i].representative;
+            if (items[i].phone) v.phone = items[i].phone;
             await db.saveCompany(v);
           } else {
             await db.saveCompany(items[i]);
@@ -524,6 +545,95 @@ export class MasothueCrawler {
   }
   return null;
 }
+
+  // --- Enrich Tax ID via Tavily Search (Extracts Representative, Phone, Tax office) ---
+  async enrichViaTavily(taxId, companyName = '') {
+    const apiKey = (process.env.TAVILY_API_KEY || '').trim();
+    if (!apiKey || !taxId) return null;
+
+    try {
+      const res = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: apiKey,
+          query: `masothue ${taxId} "đại diện"`,
+          search_depth: 'basic',
+          max_results: 5
+        })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data.results || data.results.length === 0) return null;
+
+      let representative = '';
+      let phone = '';
+      let startDate = '';
+      let managedBy = '';
+
+      for (const item of data.results) {
+        const text = `${item.title || ''} ; ${item.content || ''}`;
+
+        if (!representative) {
+          const repMatch = text.match(/(?:Người đại diện theo pháp luật|Đại diện theo pháp luật|Người đại diện pháp luật|Đại diện pháp luật|Người đại diện)[:\s,]+([^;·–\n]+)/i);
+          if (repMatch) {
+            let r = repMatch[1].trim()
+              .replace(/^(theo pháp luật|theo uỷ quyền)[\s.:,-]+/i, '')
+              .replace(/\s*(Ngoài ra.*|\d{10}.*|Ẩn số điện thoại.*|Chức vụ.*)$/i, '')
+              .replace(/^[,\-–\s.:]+|[,\-–\s.:]+$/g, '')
+              .trim();
+            const isCompanyWord = /(công ty|tnhh|cổ phần|chi nhánh|văn phòng|tập đoàn|doanh nghiệp)/i.test(r);
+            if (!isCompanyWord && r.length >= 2 && r.length <= 60 && !r.includes('http') && !r.includes('...')) {
+              representative = r;
+            }
+          }
+        }
+
+        if (!phone) {
+          const phoneMatch = text.match(/(?:Điện thoại|SĐT|Phone)[:\s,]+([0-9\s.\-+]{8,15})/i);
+          if (phoneMatch) phone = phoneMatch[1].trim();
+        }
+
+        if (!startDate) {
+          const dateMatch = text.match(/(?:Ngày hoạt động|Ngày cấp|Hoạt động từ)[:\s,]+([0-9\-\/]{8,10})/i);
+          if (dateMatch) startDate = dateMatch[1].trim();
+        }
+
+        if (!managedBy) {
+          const managedMatch = text.match(/(?:Quản lý bởi|Cơ quan thuế|Chi cục Thuế|Cục Thuế)[:\s,]*([^;·–\n]+)/i);
+          if (managedMatch) {
+            let m = managedMatch[0].trim().replace(/^[,\-–\s]+|[,\-–\s]+$/g, '');
+            if (m.length >= 4 && m.length <= 80) managedBy = m;
+          }
+        }
+      }
+
+      if (representative || phone || startDate || managedBy) {
+        return {
+          representative: representative || '',
+          phone: phone || '',
+          startDate: startDate || '',
+          managedBy: managedBy || 'Cơ quan Thuế'
+        };
+      }
+    } catch (e) {
+      console.warn('[enrichViaTavily error]', e.message);
+    }
+    return null;
+  }
+
+  // --- Combined Auto-Enricher (Tavily AI -> Serper Google) ---
+  async enrichExternal(taxId, companyName = '') {
+    // 1. Try Tavily AI (Free 1,000 requests/month)
+    const tavily = await this.enrichViaTavily(taxId, companyName);
+    if (tavily && (tavily.representative || tavily.phone)) return tavily;
+
+    // 2. Try Serper.dev Google API
+    const serper = await this.enrichViaSerper(taxId, companyName);
+    if (serper && (serper.representative || serper.phone)) return serper;
+
+    return tavily || serper || null;
+  }
 
   // --- Serper.dev (Free 2,500 Google Searches) Fallback ---
   async searchViaSerper(query) {
@@ -810,7 +920,7 @@ export class MasothueCrawler {
           const freshDetail = await this.getDetail(`/${cleanSlug}`, true);
           let serperInfo = null;
           if (!freshDetail.success || !freshDetail.data?.representative) {
-            serperInfo = await this.enrichViaSerper(q, dbCompany.name);
+            serperInfo = await this.enrichExternal(q, dbCompany.name);
           }
 
           const rep = freshDetail.data?.representative || serperInfo?.representative || '';
@@ -866,7 +976,7 @@ export class MasothueCrawler {
           const detail = await this.getDetail(`/${slug}`, true);
           let serperInfo = null;
           if (!detail.success || !detail.data?.representative) {
-            serperInfo = await this.enrichViaSerper(q, vCompany.name);
+            serperInfo = await this.enrichExternal(q, vCompany.name);
           }
 
           enrichedData = {
@@ -1235,7 +1345,7 @@ export class MasothueCrawler {
         if (taxMatch) {
           const vCompany = await this.getFromVietQR(taxMatch[1]);
           if (vCompany && vCompany.taxId && vCompany.name) {
-            const serperInfo = await this.enrichViaSerper(taxMatch[1], vCompany.name);
+            const serperInfo = await this.enrichExternal(taxMatch[1], vCompany.name);
             const finalCompany = serperInfo ? {
               ...vCompany,
               ...serperInfo,
@@ -1258,7 +1368,7 @@ export class MasothueCrawler {
         if (taxMatch) {
           const vCompany = await this.getFromVietQR(taxMatch[1]);
           if (vCompany && vCompany.taxId && vCompany.name) {
-            const serperInfo = await this.enrichViaSerper(taxMatch[1], vCompany.name);
+            const serperInfo = await this.enrichExternal(taxMatch[1], vCompany.name);
             const finalCompany = serperInfo ? {
               ...vCompany,
               ...serperInfo,
@@ -1355,7 +1465,7 @@ export class MasothueCrawler {
       if (taxMatch) {
         const vCompany = await this.getFromVietQR(taxMatch[1]);
         if (vCompany && vCompany.taxId && vCompany.name) {
-          const serperInfo = await this.enrichViaSerper(taxMatch[1], vCompany.name);
+          const serperInfo = await this.enrichExternal(taxMatch[1], vCompany.name);
           const finalCompany = serperInfo ? {
             ...vCompany,
             ...serperInfo,
