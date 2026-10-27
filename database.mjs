@@ -417,6 +417,10 @@ export class Database {
       if (res.rows && res.rows.length > 0) {
         const row = { ...res.rows[0] };
         row.data = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+        if (row.data) {
+          if (row.representative && !row.data.representative) row.data.representative = row.representative;
+          if (row.phone && !row.data.phone) row.data.phone = row.phone;
+        }
         return row;
       }
     } catch (err) {
@@ -437,6 +441,10 @@ export class Database {
       if (res.rows && res.rows.length > 0) {
         const row = { ...res.rows[0] };
         row.data = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+        if (row.data) {
+          if (row.representative && !row.data.representative) row.data.representative = row.representative;
+          if (row.phone && !row.data.phone) row.data.phone = row.phone;
+        }
         return row;
       }
 
