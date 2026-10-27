@@ -454,7 +454,7 @@ export class MasothueCrawler {
     if (!query || !query.trim()) return null;
 
     try {
-      const searchUrl = `https://search.yahoo.com/search?p=${encodeURIComponent(query.trim() + ' mã số thuế')}`;
+      const searchUrl = `https://search.yahoo.com/search?p=${encodeURIComponent('site:masothue.com ' + query.trim())}`;
       const res = await gotScraping({
         url: searchUrl,
         timeout: { request: 5000 },
@@ -476,7 +476,8 @@ export class MasothueCrawler {
         const href = titleLink.first().attr('href') || '';
         const fullText = `${title} ${snippet} ${href}`;
 
-        const taxMatch = fullText.match(/\b(0[1-9]\d{8}|[1-9]\d{9})(?:-\d{3})?\b/);
+        // Match valid Vietnamese 10-digit tax codes (01-09, 10-64, 80-89)
+        const taxMatch = fullText.match(/\b(0[1-9]\d{8}|[1-6]\d{9}|8\d{9})(?:-\d{3})?\b/);
         if (!taxMatch) return;
         const taxId = taxMatch[1];
         if (seen.has(taxId)) return;
@@ -503,52 +504,29 @@ export class MasothueCrawler {
         });
       });
 
-      if (items.length === 0) {
-        const rawMsts = [...res.body.matchAll(/\b(0[1-9]\d{8}|[1-9]\d{9})(?:-\d{3})?\b/g)].map(m => m[0]);
-        const uniqueMsts = [...new Set(rawMsts)].slice(0, 5);
-        for (const taxId of uniqueMsts) {
-          if (seen.has(taxId)) continue;
-          seen.add(taxId);
-          const slug = `${taxId}-${this.slugify(query)}`;
-          items.push({
-            name: query,
-            slug,
-            url: `/mst/${slug}`,
-            taxId,
-            representative: '',
-            phone: '',
-            address: 'Đang cập nhật',
-            province: '',
-            status: 'Đang hoạt động'
-          });
-        }
-      }
-
-      for (let i = 0; i < Math.min(items.length, 5); i++) {
+      // ONLY keep items verified by official VietQR
+      const validItems = [];
+      for (const item of items) {
         try {
-          const v = await this.getFromVietQR(items[i].taxId);
+          const v = await this.getFromVietQR(item.taxId);
           if (v && v.taxId && v.name) {
-            items[i].name = v.name;
-            items[i].address = v.address || items[i].address;
-            items[i].status = v.status || items[i].status;
-            if (items[i].representative) v.representative = items[i].representative;
-            if (items[i].phone) v.phone = items[i].phone;
+            if (item.representative) v.representative = item.representative;
+            if (item.phone) v.phone = item.phone;
             await db.saveCompany(v);
-          } else {
-            await db.saveCompany(items[i]);
+            validItems.push(v);
           }
         } catch (e) {}
       }
 
-      if (items.length > 0) {
+      if (validItems.length > 0) {
         return {
           success: true,
-          isDirect: items.length === 1,
+          isDirect: validItems.length === 1,
           fromYahoo: true,
-          items,
+          items: validItems,
           currentPage: 1,
           maxPage: 1,
-          totalFound: items.length
+          totalFound: validItems.length
         };
       }
     } catch (err) {
