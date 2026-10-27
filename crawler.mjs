@@ -86,7 +86,7 @@ export class MasothueCrawler {
           await new Promise(r => setTimeout(r, retryAfter * 1000));
           return this.getFromVietQR(taxId, retries - 1);
         }
-        return null;
+        return { isRateLimited: true, retryAfter: 60 };
       }
       if (!res.ok) return null;
       const json = await res.json();
