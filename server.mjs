@@ -579,6 +579,35 @@ app.get('/api/debug-crawler', async (req, res) => {
     const testQ = req.query.q || 'thái anh';
     diag.testQuery = testQ;
 
+    // Test Tavily Search API if configured
+    if (tavilyKey) {
+      try {
+        const t0 = Date.now();
+        const tRes = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${tavilyKey}`
+          },
+          body: JSON.stringify({
+            api_key: tavilyKey,
+            query: `${testQ} mã số thuế`,
+            search_depth: 'basic',
+            max_results: 5
+          })
+        });
+        const tJson = await tRes.json();
+        diag.tavilyTest = {
+          time: Date.now() - t0,
+          httpStatus: tRes.status,
+          resultsCount: tJson.results?.length || 0,
+          sampleTitles: (tJson.results || []).map(r => r.title).slice(0, 3)
+        };
+      } catch (err) {
+        diag.tavilyTest = { error: err.message };
+      }
+    }
+
     // Test Google Search API if configured
     if (apiKey && cx) {
       try {
@@ -674,6 +703,46 @@ app.get('/api/debug-crawler', async (req, res) => {
     res.json(diag);
   } catch (err) {
     res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
+// API: Debug Tavily Search API directly
+app.get('/api/debug-tavily', async (req, res) => {
+  const q = req.query.q || 'toa việt nam';
+  const apiKey = (process.env.TAVILY_API_KEY || '').trim();
+  if (!apiKey) {
+    return res.json({ success: false, message: 'TAVILY_API_KEY is not set in process.env!' });
+  }
+
+  try {
+    const rawQuery = `${q.trim()} mã số thuế`;
+    const apiRes = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query: rawQuery,
+        search_depth: 'basic',
+        max_results: 10
+      })
+    });
+
+    const status = apiRes.status;
+    const data = await apiRes.json();
+    res.json({
+      success: apiRes.ok,
+      httpStatus: status,
+      queryUsed: rawQuery,
+      apiKeyPrefix: apiKey ? apiKey.slice(0, 8) + '...' : null,
+      resultsCount: data.results?.length || 0,
+      results: data.results || [],
+      error: data.error || null
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

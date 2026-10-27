@@ -347,7 +347,10 @@ export class MasothueCrawler {
     try {
       const res = await fetch('https://api.tavily.com/search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
         body: JSON.stringify({
           api_key: apiKey,
           query: `${query.trim()} mã số thuế`,
@@ -355,7 +358,11 @@ export class MasothueCrawler {
           max_results: 10
         })
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        console.warn(`[Tavily Search API] HTTP ${res.status}: ${errText}`);
+        return null;
+      }
       const data = await res.json();
       if (!data.results || data.results.length === 0) return null;
 
@@ -373,6 +380,7 @@ export class MasothueCrawler {
           .replace(/-\s*MaSoThue.*$/i, '')
           .replace(/-\s*Mã số thuế.*$/i, '')
           .replace(/^\d{10}(-\d{3})?\s*[-–—:]\s*/, '')
+          .replace(/\s*[-–—:]\s*\d{10}(-\d{3})?.*$/, '')
           .trim();
 
         let rep = '';
@@ -408,7 +416,7 @@ export class MasothueCrawler {
         items.push(comp);
       }
 
-      for (let i = 0; i < Math.min(items.length, 3); i++) {
+      for (let i = 0; i < Math.min(items.length, 5); i++) {
         try {
           const v = await this.getFromVietQR(items[i].taxId);
           if (v && v.taxId && v.name) {
@@ -437,6 +445,114 @@ export class MasothueCrawler {
       }
     } catch (err) {
       console.warn('[Tavily Search Error]', err.message);
+    }
+    return null;
+  }
+
+  // --- Yahoo Search Fallback (100% Free Forever, No Key, Bypasses Cloud Datacenter Blocks) ---
+  async searchViaYahoo(query) {
+    if (!query || !query.trim()) return null;
+
+    try {
+      const searchUrl = `https://search.yahoo.com/search?p=${encodeURIComponent(query.trim() + ' mã số thuế')}`;
+      const res = await gotScraping({
+        url: searchUrl,
+        timeout: { request: 5000 },
+        headers: {
+          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+        }
+      });
+      if (res.statusCode !== 200 || !res.body) return null;
+
+      const $ = cheerio.load(res.body);
+      const items = [];
+      const seen = new Set();
+
+      $('div.algo, li div.dd').each((_, el) => {
+        const $el = $(el);
+        const titleLink = $el.find('h3 a, a.compText, a');
+        const title = titleLink.first().text().trim();
+        const snippet = $el.find('.compText, .compText p, p').text().trim();
+        const href = titleLink.first().attr('href') || '';
+        const fullText = `${title} ${snippet} ${href}`;
+
+        const taxMatch = fullText.match(/\b(0[1-9]\d{8}|[1-9]\d{9})(?:-\d{3})?\b/);
+        if (!taxMatch) return;
+        const taxId = taxMatch[1];
+        if (seen.has(taxId)) return;
+        seen.add(taxId);
+
+        let cleanName = title
+          .replace(/-\s*MaSoThue.*$/i, '')
+          .replace(/-\s*Mã số thuế.*$/i, '')
+          .replace(/^\d{10}(-\d{3})?\s*[-–—:]\s*/, '')
+          .replace(/\s*[-–—:]\s*\d{10}(-\d{3})?.*$/, '')
+          .trim();
+
+        const slug = `${taxId}-${this.slugify(cleanName || query)}`;
+        items.push({
+          name: cleanName || query,
+          slug,
+          url: `/mst/${slug}`,
+          taxId,
+          representative: '',
+          phone: '',
+          address: snippet ? snippet.slice(0, 150) : 'Đang cập nhật',
+          province: db.extractProvince(snippet || ''),
+          status: 'Đang hoạt động'
+        });
+      });
+
+      if (items.length === 0) {
+        const rawMsts = [...res.body.matchAll(/\b(0[1-9]\d{8}|[1-9]\d{9})(?:-\d{3})?\b/g)].map(m => m[0]);
+        const uniqueMsts = [...new Set(rawMsts)].slice(0, 5);
+        for (const taxId of uniqueMsts) {
+          if (seen.has(taxId)) continue;
+          seen.add(taxId);
+          const slug = `${taxId}-${this.slugify(query)}`;
+          items.push({
+            name: query,
+            slug,
+            url: `/mst/${slug}`,
+            taxId,
+            representative: '',
+            phone: '',
+            address: 'Đang cập nhật',
+            province: '',
+            status: 'Đang hoạt động'
+          });
+        }
+      }
+
+      for (let i = 0; i < Math.min(items.length, 5); i++) {
+        try {
+          const v = await this.getFromVietQR(items[i].taxId);
+          if (v && v.taxId && v.name) {
+            items[i].name = v.name;
+            items[i].address = v.address || items[i].address;
+            items[i].status = v.status || items[i].status;
+            if (items[i].representative) v.representative = items[i].representative;
+            if (items[i].phone) v.phone = items[i].phone;
+            await db.saveCompany(v);
+          } else {
+            await db.saveCompany(items[i]);
+          }
+        } catch (e) {}
+      }
+
+      if (items.length > 0) {
+        return {
+          success: true,
+          isDirect: items.length === 1,
+          fromYahoo: true,
+          items,
+          currentPage: 1,
+          maxPage: 1,
+          totalFound: items.length
+        };
+      }
+    } catch (err) {
+      console.warn('[Yahoo Search Error]', err.message);
     }
     return null;
   }
@@ -554,7 +670,10 @@ export class MasothueCrawler {
     try {
       const res = await fetch('https://api.tavily.com/search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
         body: JSON.stringify({
           api_key: apiKey,
           query: `masothue ${taxId} "đại diện"`,
@@ -562,7 +681,11 @@ export class MasothueCrawler {
           max_results: 5
         })
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        console.warn(`[Tavily Enrich API] HTTP ${res.status}: ${errText}`);
+        return null;
+      }
       const data = await res.json();
       if (!data.results || data.results.length === 0) return null;
 
@@ -1214,7 +1337,24 @@ export class MasothueCrawler {
       return tavilyResult;
     }
 
-    // --- Priority 2: Serper.dev Google API (2,500 Free searches) ---
+    // --- Priority 2: Yahoo Search Fallback (100% Free Forever, Unlimited, No API Key) ---
+    const yahooResult = await this.searchViaYahoo(effectiveQ);
+    if (yahooResult && yahooResult.items && yahooResult.items.length > 0) {
+      if (dbItems && dbItems.length > 0) {
+        const seenTax = new Set(yahooResult.items.map(i => i.taxId));
+        for (const item of dbItems) {
+          if (!seenTax.has(item.taxId)) {
+            yahooResult.items.push(item);
+            seenTax.add(item.taxId);
+          }
+        }
+        yahooResult.totalFound = yahooResult.items.length;
+      }
+      this.setCache(cacheKey, yahooResult);
+      return yahooResult;
+    }
+
+    // --- Priority 3: Serper.dev Google API (2,500 Free searches) ---
     const serperResult = await this.searchViaSerper(effectiveQ);
     if (serperResult && serperResult.items && serperResult.items.length > 0) {
       if (dbItems && dbItems.length > 0) {
