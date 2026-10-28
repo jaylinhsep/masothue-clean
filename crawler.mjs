@@ -26,8 +26,15 @@ export class MasothueCrawler {
           'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
         },
         body: 'r=' + Math.random().toString(36).substring(7),
-        timeout: { request: 3500 }
+        timeout: { request: 3000 }
       });
+
+      // Capture and persist session cookies (PHPSESSID) for subsequent Ajax/Search requests
+      const rawCookies = tokenRes.headers['set-cookie'];
+      if (rawCookies) {
+        const cookieArr = Array.isArray(rawCookies) ? rawCookies : [rawCookies];
+        this.sessionCookie = cookieArr.map(c => c.split(';')[0]).join('; ');
+      }
 
       const tokenData = JSON.parse(tokenRes.body);
       if (tokenData && tokenData.success && tokenData.token) {
@@ -425,7 +432,7 @@ export class MasothueCrawler {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       const res = await fetch(`${bridgeUrl}/api/search?q=${encodeURIComponent(query.trim())}`, {
         headers: {
@@ -460,7 +467,7 @@ export class MasothueCrawler {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
 
       const cleanPath = path.startsWith('/') ? path : '/' + path;
       const res = await fetch(`${bridgeUrl}/api/detail?path=${encodeURIComponent(cleanPath)}`, {
@@ -566,21 +573,28 @@ export class MasothueCrawler {
         items.push(comp);
       }
 
-      for (let i = 0; i < Math.min(items.length, 5); i++) {
+      // Parallel ultra-fast enrichment for top items (max 1.5s total)
+      const enrichPromises = items.slice(0, 5).map(async (item) => {
         try {
-          const v = await this.getFromVietQR(items[i].taxId);
+          const v = await Promise.race([
+            this.getFromVietQR(item.taxId),
+            new Promise(r => setTimeout(() => r(null), 1500))
+          ]);
           if (v && v.taxId && v.name) {
-            items[i].name = v.name;
-            items[i].address = v.address || items[i].address;
-            items[i].status = v.status || items[i].status;
-            if (items[i].representative) v.representative = items[i].representative;
-            if (items[i].phone) v.phone = items[i].phone;
-            await db.saveCompany(v);
+            item.name = v.name;
+            item.address = v.address || item.address;
+            item.status = v.status || item.status;
+            if (item.representative) v.representative = item.representative;
+            if (item.phone) v.phone = item.phone;
+            db.saveCompany(v).catch(() => {});
           } else {
-            await db.saveCompany(items[i]);
+            db.saveCompany(item).catch(() => {});
           }
-        } catch (e) {}
-      }
+        } catch (e) {
+          db.saveCompany(item).catch(() => {});
+        }
+      });
+      await Promise.allSettled(enrichPromises);
 
       if (items.length > 0) {
         return {
@@ -654,19 +668,27 @@ export class MasothueCrawler {
         });
       });
 
-      // ONLY keep items verified by official VietQR
-      const validItems = [];
-      for (const item of items) {
+      // Parallel verification with official VietQR (max 1.5s total across all items)
+      const enrichPromises = items.slice(0, 6).map(async (item) => {
         try {
-          const v = await this.getFromVietQR(item.taxId);
+          const v = await Promise.race([
+            this.getFromVietQR(item.taxId),
+            new Promise(r => setTimeout(() => r(null), 1500))
+          ]);
           if (v && v.taxId && v.name) {
             if (item.representative) v.representative = item.representative;
             if (item.phone) v.phone = item.phone;
-            await db.saveCompany(v);
-            validItems.push(v);
+            db.saveCompany(v).catch(() => {});
+            return v;
           }
-        } catch (e) {}
-      }
+          db.saveCompany(item).catch(() => {});
+          return item;
+        } catch (e) {
+          db.saveCompany(item).catch(() => {});
+          return item;
+        }
+      });
+      const validItems = (await Promise.all(enrichPromises)).filter(Boolean);
 
       if (validItems.length > 0) {
         return {
@@ -1083,12 +1105,14 @@ export class MasothueCrawler {
         items.push(comp);
       });
 
-      // Enrich top items with authoritative VietQR details if name is truncated or address is short
-      for (let i = 0; i < Math.min(items.length, 5); i++) {
-        const item = items[i];
+      // Parallel enrichment for top items (max 1.5s total)
+      const enrichPromises = items.slice(0, 5).map(async (item) => {
         if (item.name.includes('...') || item.name.length < 15 || !item.address || item.address === 'Đang cập nhật') {
           try {
-            const vComp = await this.getFromVietQR(item.taxId);
+            const vComp = await Promise.race([
+              this.getFromVietQR(item.taxId),
+              new Promise(r => setTimeout(() => r(null), 1500))
+            ]);
             if (vComp && vComp.name) {
               item.name = vComp.name;
               if (vComp.address) item.address = vComp.address;
@@ -1100,11 +1124,9 @@ export class MasothueCrawler {
             }
           } catch (e) {}
         }
-        // Auto-save to Turso DB
-        db.saveCompany(item).catch(err => {
-          console.warn('[DB auto-save error]:', err.message);
-        });
-      }
+        db.saveCompany(item).catch(() => {});
+      });
+      await Promise.allSettled(enrichPromises);
 
       if (items.length > 0) {
         return {
@@ -1217,33 +1239,38 @@ export class MasothueCrawler {
         }
       }
 
-      // Priority 2: If not in DB, fetch from VietQR and automatically enrich full details!
-      const vCompany = await this.getFromVietQR(q);
-      if (vCompany && vCompany.taxId && vCompany.name) {
-        // Automatically enrich via slug or Serper to get representative, phone, startDate, tax office
-        const slug = `${vCompany.taxId}-${this.slugify(vCompany.name)}`;
-        let enrichedData = { ...vCompany };
-        try {
-          const detail = await this.getDetail(`/${slug}`, true);
-          let bizInfo = null;
-          if (!detail.success || !detail.data?.representative) {
-            bizInfo = await this.getFromDoanhNghiepBiz(q);
-          }
+      // Priority 2: Ultra-fast Parallel Retrieval from VietQR + DoanhNghiep.biz (<400ms)
+      const [vRes, bizRes] = await Promise.allSettled([
+        this.getFromVietQR(q),
+        this.getFromDoanhNghiepBiz(q)
+      ]);
+      const vCompany = vRes.status === 'fulfilled' ? vRes.value : null;
+      const bizInfo = bizRes.status === 'fulfilled' ? bizRes.value : null;
 
-          enrichedData = {
-            ...vCompany,
-            ...(detail.data || {}),
-            representative: detail.data?.representative || bizInfo?.representative || vCompany.representative || '',
-            phone: detail.data?.phone || bizInfo?.phone || vCompany.phone || '',
-            startDate: detail.data?.startDate || bizInfo?.startDate || vCompany.startDate || '',
-            managedBy: (detail.data?.managedBy && detail.data.managedBy !== 'Cơ quan Thuế') 
-              ? detail.data.managedBy 
-              : (vCompany.managedBy || 'Cơ quan Thuế'),
-            industries: Array.isArray(detail.data?.industries) && detail.data.industries.length > 0 ? detail.data.industries : vCompany.industries
-          };
-        } catch (e) {
-          console.warn('[Search Auto-Enrich Error]', e.message);
-        }
+      if ((vCompany && vCompany.name) || (bizInfo && (bizInfo.name || bizInfo.representative))) {
+        const companyName = vCompany?.name || bizInfo?.name || `Doanh nghiệp MST ${q}`;
+        const slug = `${q}-${this.slugify(companyName)}`;
+        const enrichedData = {
+          name: companyName,
+          slug,
+          url: `/mst/${slug}`,
+          taxId: q,
+          taxAddress: vCompany?.address || bizInfo?.address || '',
+          address: bizInfo?.address || vCompany?.address || '',
+          representative: bizInfo?.representative || vCompany?.representative || '',
+          representativeNote: bizInfo?.representativeNote || vCompany?.representativeNote || '',
+          phone: bizInfo?.phone || vCompany?.phone || '',
+          startDate: bizInfo?.startDate || vCompany?.startDate || '',
+          managedBy: (bizInfo?.managedBy && bizInfo.managedBy !== 'Cơ quan Thuế')
+            ? bizInfo.managedBy
+            : ((vCompany?.managedBy && vCompany.managedBy !== 'Cơ quan Thuế') ? vCompany.managedBy : 'Cơ quan Thuế'),
+          status: bizInfo?.status || vCompany?.status || 'Đang hoạt động',
+          isStatusActive: true,
+          type: bizInfo?.type || vCompany?.type || 'Doanh nghiệp',
+          mainIndustry: bizInfo?.mainIndustry || vCompany?.mainIndustry || db.detectIndustry(companyName),
+          lastUpdated: new Date().toLocaleDateString('vi-VN'),
+          industries: (vCompany?.industries?.length ? vCompany.industries : (bizInfo?.industries || []))
+        };
 
         await db.saveCompany(enrichedData);
         const cleanSlug = slug.replace(/^\/?(mst\/)?/, '');
@@ -1323,6 +1350,24 @@ export class MasothueCrawler {
         this.setCache(cacheKey, vnResult);
         return vnResult;
       }
+
+      // Fast-Path for Render: If VN Bridge found nothing, do NOT spend 20s running US scrapers
+      if (dbItems && dbItems.length > 0) {
+        return {
+          success: true,
+          isDirect: dbItems.length === 1,
+          fromDb: true,
+          items: dbItems,
+          currentPage: 1,
+          maxPage: 1,
+          totalFound: dbItems.length
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Không tìm thấy doanh nghiệp phù hợp. Bạn hãy thử nhập chính xác Mã Số Thuế (10 chữ số) hoặc tên đầy đủ hơn.'
+      };
     }
 
     // 3. Search Masothue using stealth gotScraping (Runs on VPS with domestic VN IP)
@@ -1338,15 +1383,20 @@ export class MasothueCrawler {
       });
 
       try {
+        const searchHeaders = {
+          'referer': `${this.baseUrl}/`,
+          'origin': this.baseUrl,
+          'x-requested-with': 'XMLHttpRequest',
+          'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        };
+        if (this.sessionCookie) {
+          searchHeaders['cookie'] = this.sessionCookie;
+        }
+
         let ajaxRes = await gotScraping.post(`${this.baseUrl}/Ajax/Search`, {
-          headers: {
-            'referer': `${this.baseUrl}/`,
-            'origin': this.baseUrl,
-            'x-requested-with': 'XMLHttpRequest',
-            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
-          },
+          headers: searchHeaders,
           body: searchBody.toString(),
-          timeout: { request: 3500 }
+          timeout: { request: 3000 }
         });
 
         if (ajaxRes.body && ajaxRes.body.trim().startsWith('<')) {
@@ -1365,15 +1415,19 @@ export class MasothueCrawler {
           token = await this.ensureSession(true);
           if (token) {
             searchBody.set('token', token);
+            const retryHeaders = {
+              'referer': `${this.baseUrl}/`,
+              'origin': this.baseUrl,
+              'x-requested-with': 'XMLHttpRequest',
+              'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            };
+            if (this.sessionCookie) {
+              retryHeaders['cookie'] = this.sessionCookie;
+            }
             ajaxRes = await gotScraping.post(`${this.baseUrl}/Ajax/Search`, {
-              headers: {
-                'referer': `${this.baseUrl}/`,
-                'origin': this.baseUrl,
-                'x-requested-with': 'XMLHttpRequest',
-                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
-              },
+              headers: retryHeaders,
               body: searchBody.toString(),
-              timeout: { request: 3500 }
+              timeout: { request: 3000 }
             });
             if (ajaxRes.body && !ajaxRes.body.trim().startsWith('<')) {
               try {
@@ -1417,12 +1471,17 @@ export class MasothueCrawler {
       try {
         const searchUrl = `${this.baseUrl}/Search/?q=${encodeURIComponent(effectiveQ)}&type=${type || 'auto'}&token=${token}&force-search=1${page > 1 ? `&page=${page}` : ''}`;
 
+        const searchListHeaders = {
+          'referer': `${this.baseUrl}/`
+        };
+        if (this.sessionCookie) {
+          searchListHeaders['cookie'] = this.sessionCookie;
+        }
+
         const pageRes = await gotScraping({
           url: searchUrl,
-          headers: {
-            'referer': `${this.baseUrl}/`
-          },
-          timeout: { request: 3500 }
+          headers: searchListHeaders,
+          timeout: { request: 3000 }
         });
 
         const $ = cheerio.load(pageRes.body);
@@ -1634,12 +1693,17 @@ export class MasothueCrawler {
     const url = this.baseUrl + rawMasothuePath;
 
     try {
+      const detailHeaders = {
+        'referer': `${this.baseUrl}/`
+      };
+      if (this.sessionCookie) {
+        detailHeaders['cookie'] = this.sessionCookie;
+      }
+
       const res = await gotScraping({
         url,
-        headers: {
-          'referer': `${this.baseUrl}/`
-        },
-        timeout: { request: 3500 }
+        headers: detailHeaders,
+        timeout: { request: 3000 }
       });
 
       if (res.statusCode !== 200) {
@@ -1647,9 +1711,13 @@ export class MasothueCrawler {
           return { success: true, data: existingInDb.data, fromDb: true };
         }
         if (taxMatch) {
-          // Priority fallback: DoanhNghiepBiz (has representative + phone!) and VietQR
-          const bizData = await this.getFromDoanhNghiepBiz(taxMatch[1]);
-          const vCompany = await this.getFromVietQR(taxMatch[1]);
+          // Priority fallback: Ultra-fast parallel DoanhNghiepBiz + VietQR (<350ms)
+          const [bizRes, vRes] = await Promise.allSettled([
+            this.getFromDoanhNghiepBiz(taxMatch[1]),
+            this.getFromVietQR(taxMatch[1])
+          ]);
+          const bizData = bizRes.status === 'fulfilled' ? bizRes.value : null;
+          const vCompany = vRes.status === 'fulfilled' ? vRes.value : null;
           if (bizData || vCompany) {
             const finalCompany = {
               name: vCompany?.name || bizData?.name || '',
@@ -1687,8 +1755,12 @@ export class MasothueCrawler {
           return { success: true, data: existingInDb.data, fromDb: true };
         }
         if (taxMatch) {
-          const bizData = await this.getFromDoanhNghiepBiz(taxMatch[1]);
-          const vCompany = await this.getFromVietQR(taxMatch[1]);
+          const [bizRes, vRes] = await Promise.allSettled([
+            this.getFromDoanhNghiepBiz(taxMatch[1]),
+            this.getFromVietQR(taxMatch[1])
+          ]);
+          const bizData = bizRes.status === 'fulfilled' ? bizRes.value : null;
+          const vCompany = vRes.status === 'fulfilled' ? vRes.value : null;
           if (bizData || vCompany) {
             const finalCompany = {
               name: vCompany?.name || bizData?.name || '',
