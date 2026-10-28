@@ -568,8 +568,27 @@ app.get('/api/debug-crawler', async (req, res) => {
 
     const braveKey = (process.env.BRAVE_SEARCH_API_KEY || process.env.BRAVE_API_KEY || '').trim();
     const tavilyKey = (process.env.TAVILY_API_KEY || '').trim();
+    const vnBridgeUrl = (process.env.VN_BRIDGE_URL || '').trim();
     diag.hasBraveKey = Boolean(braveKey);
     diag.hasTavilyKey = Boolean(tavilyKey);
+    diag.hasVnBridge = Boolean(vnBridgeUrl);
+    diag.vnBridgeUrl = vnBridgeUrl ? vnBridgeUrl.replace(/:[^:@]+@/, ':***@') : null;
+
+    // Test Vietnam VPS Bridge if configured
+    if (vnBridgeUrl) {
+      try {
+        const t0 = Date.now();
+        const bRes = await fetch(`${vnBridgeUrl.replace(/\/+$/, '')}/health`, { signal: AbortSignal.timeout(3000) });
+        const bJson = await bRes.json();
+        diag.vnBridgeTest = {
+          time: Date.now() - t0,
+          status: bRes.status,
+          response: bJson
+        };
+      } catch (e) {
+        diag.vnBridgeTest = { error: e.message };
+      }
+    }
 
     // List all non-sensitive environment variable names to diagnose configuration
     diag.envKeyNames = Object.keys(process.env).filter(k => 

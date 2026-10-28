@@ -339,6 +339,78 @@ export class MasothueCrawler {
     return null;
   }
 
+  // --- Vietnam VPS Bridge (100% Free, Private, Domestic VN IP, Zero Block) ---
+  async searchViaVnBridge(query) {
+    const bridgeUrl = (process.env.VN_BRIDGE_URL || '').trim().replace(/\/+$/, '');
+    const bridgeToken = (process.env.VN_BRIDGE_TOKEN || process.env.VN_BRIDGE_KEY || '').trim();
+    if (!bridgeUrl || !query || !query.trim()) return null;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const res = await fetch(`${bridgeUrl}/api/search?q=${encodeURIComponent(query.trim())}`, {
+        headers: {
+          'x-bridge-token': bridgeToken,
+          'Accept': 'application/json'
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        console.warn(`[VN Bridge Search API] HTTP ${res.status}`);
+        return null;
+      }
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.items) && data.items.length > 0) {
+        return {
+          ...data,
+          fromVnBridge: true
+        };
+      }
+    } catch (err) {
+      console.warn('[VN Bridge Search Error]', err.message);
+    }
+    return null;
+  }
+
+  async getDetailViaVnBridge(path) {
+    const bridgeUrl = (process.env.VN_BRIDGE_URL || '').trim().replace(/\/+$/, '');
+    const bridgeToken = (process.env.VN_BRIDGE_TOKEN || process.env.VN_BRIDGE_KEY || '').trim();
+    if (!bridgeUrl || !path) return null;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const cleanPath = path.startsWith('/') ? path : '/' + path;
+      const res = await fetch(`${bridgeUrl}/api/detail?path=${encodeURIComponent(cleanPath)}`, {
+        headers: {
+          'x-bridge-token': bridgeToken,
+          'Accept': 'application/json'
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        console.warn(`[VN Bridge Detail API] HTTP ${res.status}`);
+        return null;
+      }
+      const data = await res.json();
+      if (data && data.success && data.data) {
+        return {
+          ...data,
+          fromVnBridge: true
+        };
+      }
+    } catch (err) {
+      console.warn('[VN Bridge Detail Error]', err.message);
+    }
+    return null;
+  }
+
   // --- Tavily Search API (1,000 Free Searches/Month Forever) ---
   async searchViaTavily(query) {
     const apiKey = (process.env.TAVILY_API_KEY || '').trim();
@@ -1298,6 +1370,23 @@ export class MasothueCrawler {
       }
     }
 
+    // --- Priority 0: Vietnam VPS Bridge (Domestic VN IP, Zero Block, Real-time) ---
+    const vnResult = await this.searchViaVnBridge(effectiveQ);
+    if (vnResult && vnResult.items && vnResult.items.length > 0) {
+      if (dbItems && dbItems.length > 0) {
+        const seenTax = new Set(vnResult.items.map(i => i.taxId));
+        for (const item of dbItems) {
+          if (!seenTax.has(item.taxId)) {
+            vnResult.items.push(item);
+            seenTax.add(item.taxId);
+          }
+        }
+        vnResult.totalFound = vnResult.items.length;
+      }
+      this.setCache(cacheKey, vnResult);
+      return vnResult;
+    }
+
     // --- Priority 1: Tavily AI Search (1,000 Free searches/month forever, No Credit Card) ---
     const tavilyResult = await this.searchViaTavily(effectiveQ);
     if (tavilyResult && tavilyResult.items && tavilyResult.items.length > 0) {
@@ -1457,6 +1546,13 @@ export class MasothueCrawler {
       });
 
       if (res.statusCode !== 200) {
+        // 1. Try Vietnam VPS Bridge first (Bypasses Cloudflare from domestic VN IP)
+        const vnDetail = await this.getDetailViaVnBridge(cleanPath);
+        if (vnDetail && vnDetail.success && vnDetail.data) {
+          await db.saveCompany(vnDetail.data);
+          return vnDetail;
+        }
+
         if (existingInDb && existingInDb.data && (existingInDb.representative || existingInDb.data.representative)) {
           return { success: true, data: existingInDb.data, fromDb: true };
         }
