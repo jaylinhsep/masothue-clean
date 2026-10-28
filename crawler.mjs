@@ -25,7 +25,8 @@ export class MasothueCrawler {
           'x-requested-with': 'XMLHttpRequest',
           'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
         },
-        body: 'r=' + Math.random().toString(36).substring(7)
+        body: 'r=' + Math.random().toString(36).substring(7),
+        timeout: { request: 3500 }
       });
 
       const tokenData = JSON.parse(tokenRes.body);
@@ -1226,7 +1227,28 @@ export class MasothueCrawler {
       return { ...cached, fromCache: true };
     }
 
-    // 3. Search Masothue using stealth gotScraping (Bypasses Cloudflare JA3 TLS checks)
+    // --- Priority 0: Vietnam VPS Bridge (Domestic VN IP, Zero Block, Real-time) ---
+    // If VN_BRIDGE_URL is configured (Render Server), IMMEDIATELY query VPS bridge!
+    // Never let Render hang 15-30s attempting to scrape masothue.com directly from foreign US IP!
+    if (process.env.VN_BRIDGE_URL) {
+      const vnResult = await this.searchViaVnBridge(effectiveQ);
+      if (vnResult && vnResult.items && vnResult.items.length > 0) {
+        if (dbItems && dbItems.length > 0) {
+          const seenTax = new Set(vnResult.items.map(i => i.taxId));
+          for (const item of dbItems) {
+            if (!seenTax.has(item.taxId)) {
+              vnResult.items.push(item);
+              seenTax.add(item.taxId);
+            }
+          }
+          vnResult.totalFound = vnResult.items.length;
+        }
+        this.setCache(cacheKey, vnResult);
+        return vnResult;
+      }
+    }
+
+    // 3. Search Masothue using stealth gotScraping (Runs on VPS with domestic VN IP)
     let token = await this.ensureSession();
 
     let ajaxData = null;
@@ -1246,7 +1268,8 @@ export class MasothueCrawler {
             'x-requested-with': 'XMLHttpRequest',
             'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
           },
-          body: searchBody.toString()
+          body: searchBody.toString(),
+          timeout: { request: 3500 }
         });
 
         if (ajaxRes.body && ajaxRes.body.trim().startsWith('<')) {
@@ -1260,8 +1283,8 @@ export class MasothueCrawler {
           }
         }
 
-        // If expired token, retry once
-        if (!ajaxData || ajaxData.url === '/') {
+        // If expired token (success !== 1), retry once
+        if (!ajaxData || ajaxData.success !== 1) {
           token = await this.ensureSession(true);
           if (token) {
             searchBody.set('token', token);
@@ -1272,7 +1295,8 @@ export class MasothueCrawler {
                 'x-requested-with': 'XMLHttpRequest',
                 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
               },
-              body: searchBody.toString()
+              body: searchBody.toString(),
+              timeout: { request: 3500 }
             });
             if (ajaxRes.body && !ajaxRes.body.trim().startsWith('<')) {
               try {
@@ -1320,7 +1344,8 @@ export class MasothueCrawler {
           url: searchUrl,
           headers: {
             'referer': `${this.baseUrl}/`
-          }
+          },
+          timeout: { request: 3500 }
         });
 
         const $ = cheerio.load(pageRes.body);
@@ -1368,23 +1393,6 @@ export class MasothueCrawler {
       } catch (err) {
         console.warn('[Crawler] gotScraping search list error:', err.message);
       }
-    }
-
-    // --- Priority 0: Vietnam VPS Bridge (Domestic VN IP, Zero Block, Real-time) ---
-    const vnResult = await this.searchViaVnBridge(effectiveQ);
-    if (vnResult && vnResult.items && vnResult.items.length > 0) {
-      if (dbItems && dbItems.length > 0) {
-        const seenTax = new Set(vnResult.items.map(i => i.taxId));
-        for (const item of dbItems) {
-          if (!seenTax.has(item.taxId)) {
-            vnResult.items.push(item);
-            seenTax.add(item.taxId);
-          }
-        }
-        vnResult.totalFound = vnResult.items.length;
-      }
-      this.setCache(cacheKey, vnResult);
-      return vnResult;
     }
 
     // --- Priority 1: Tavily AI Search (1,000 Free searches/month forever, No Credit Card) ---
@@ -1533,6 +1541,17 @@ export class MasothueCrawler {
       }
     }
 
+    // --- Priority 0: Vietnam VPS Bridge (Domestic VN IP, Zero Block, Real-time) ---
+    // If VN_BRIDGE_URL is configured (Render Server), IMMEDIATELY query VPS bridge!
+    // Never let Render hang 15-30s attempting to fetch masothue.com directly from foreign US IP!
+    if (process.env.VN_BRIDGE_URL) {
+      const vnDetail = await this.getDetailViaVnBridge(cleanPath);
+      if (vnDetail && vnDetail.success && vnDetail.data) {
+        await db.saveCompany(vnDetail.data);
+        return vnDetail;
+      }
+    }
+
     // Always strip '/mst/' when requesting masothue.com
     const rawMasothuePath = cleanPath.replace(/^\/?(mst\/)?/, '/');
     const url = this.baseUrl + rawMasothuePath;
@@ -1542,17 +1561,11 @@ export class MasothueCrawler {
         url,
         headers: {
           'referer': `${this.baseUrl}/`
-        }
+        },
+        timeout: { request: 3500 }
       });
 
       if (res.statusCode !== 200) {
-        // 1. Try Vietnam VPS Bridge first (Bypasses Cloudflare from domestic VN IP)
-        const vnDetail = await this.getDetailViaVnBridge(cleanPath);
-        if (vnDetail && vnDetail.success && vnDetail.data) {
-          await db.saveCompany(vnDetail.data);
-          return vnDetail;
-        }
-
         if (existingInDb && existingInDb.data && (existingInDb.representative || existingInDb.data.representative)) {
           return { success: true, data: existingInDb.data, fromDb: true };
         }
