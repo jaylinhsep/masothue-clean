@@ -256,8 +256,9 @@ async function handleCompanyPage(req, res, slug) {
     // 1. Check if company already in Database
     let company = (await db.getCompanyBySlug(cleanSlug)) || (await db.getCompanyByTaxId(cleanSlug));
 
-    // 2. If not in DB, crawl on demand and save to DB
-    if (!company) {
+    // 2. If not in DB OR incomplete in DB (missing representative/phone), crawl on demand immediately!
+    const isMissingDetails = !company || (company.data && !company.representative && !company.data.representative);
+    if (isMissingDetails) {
       if (/^\d{10}(-\d{3})?$/.test(cleanSlug)) {
         const sRes = await crawler.search(cleanSlug);
         if (sRes.isDirect && sRes.detail) {
@@ -268,24 +269,9 @@ async function handleCompanyPage(req, res, slug) {
         const dRes = await crawler.getDetail('/' + cleanSlug, true);
         if (dRes.success && dRes.data) {
           await db.saveCompany(dRes.data);
-          company = (await db.getCompanyBySlug(cleanSlug)) || (await db.getCompanyByTaxId(dRes.data.taxId));
+          company = (await db.getCompanyBySlug(cleanSlug)) || (await db.getCompanyByTaxId(dRes.data.taxId)) || { data: dRes.data, ...dRes.data };
         }
       }
-    }
-
-    // 2b. Auto-enrich in background (NON-BLOCKING) so user request is served immediately!
-    if (company && company.data && (!company.representative || !company.data.representative || !company.data.managedBy || company.data.managedBy === 'Cơ quan Thuế')) {
-      setImmediate(() => {
-        crawler.getDetail('/' + (company.slug || cleanSlug), true)
-          .then(dRes => {
-            if (dRes.success && dRes.data && (dRes.data.representative || dRes.data.managedBy)) {
-              db.saveCompany(dRes.data).then(() => {
-                pageCache.delete(cacheKey);
-              }).catch(() => {});
-            }
-          })
-          .catch(() => {});
-      });
     }
 
     if (!company) {

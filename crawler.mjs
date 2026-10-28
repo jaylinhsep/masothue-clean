@@ -340,6 +340,83 @@ export class MasothueCrawler {
     return null;
   }
 
+  // --- DoanhNghiep.Biz Fallback (100% Free, Domestic VN, Has Representative & Phone, Zero Cloudflare Block) ---
+  async getFromDoanhNghiepBiz(taxId) {
+    const cleanId = (taxId || '').trim();
+    if (!cleanId || !/^\d{10}(-\d{3})?$/.test(cleanId)) return null;
+
+    try {
+      const res = await gotScraping({
+        url: `https://doanhnghiep.biz/${cleanId}`,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Referer': 'https://doanhnghiep.biz/'
+        },
+        timeout: { request: 4000 }
+      });
+
+      if (res.statusCode !== 200 || !res.body) return null;
+
+      const $ = cheerio.load(res.body);
+      const title = $('h5, h1, title').first().text().trim();
+      if (!title || res.body.includes('Không tìm thấy')) return null;
+
+      const info = {
+        taxId: cleanId,
+        name: '',
+        representative: '',
+        phone: '',
+        address: '',
+        startDate: '',
+        status: '',
+        type: '',
+        mainIndustry: '',
+        shortName: ''
+      };
+
+      $('table tr').each((_, tr) => {
+        const $tr = $(tr);
+        const firstTd = $tr.find('td, th').first().text().trim();
+        const lastTd = $tr.find('td, th').last().text().trim();
+
+        if (firstTd.includes('Số ĐKKD') || firstTd.includes('MST')) {
+          info.taxId = lastTd || cleanId;
+        } else if (firstTd.includes('Tên giao dịch')) {
+          info.shortName = lastTd;
+        } else if (firstTd.includes('Người đại diện')) {
+          let rep = lastTd;
+          if (rep.includes('Ngoài ra')) {
+            rep = rep.split('Ngoài ra')[0].trim();
+          }
+          info.representative = rep;
+        } else if (firstTd.includes('Điện thoại')) {
+          info.phone = lastTd.replace(/Ẩn số điện thoại/i, '').replace(/Hiện số điện thoại/i, '').trim();
+        } else if (firstTd.includes('Địa chỉ')) {
+          info.address = lastTd;
+        } else if (firstTd.includes('Ngày hoạt động') || firstTd.includes('Ngày cấp')) {
+          if (!info.startDate) info.startDate = lastTd;
+        } else if (firstTd.includes('Tình trạng')) {
+          info.status = lastTd;
+        } else if (firstTd.includes('Loại hình DN')) {
+          info.type = lastTd;
+        } else if (firstTd.includes('Ngành nghề KD')) {
+          info.mainIndustry = lastTd;
+        }
+      });
+
+      const nameEl = $('th[itemprop="name"], h5').first().text().trim();
+      if (nameEl) {
+        info.name = nameEl.replace(/^\d{10}(-\d{3})?\s*-\s*/, '').trim();
+      }
+
+      return (info.representative || info.phone || info.name) ? info : null;
+    } catch (err) {
+      console.warn('[doanhnghiep.biz Error]:', err.message);
+      return null;
+    }
+  }
+
   // --- Vietnam VPS Bridge (100% Free, Private, Domestic VN IP, Zero Block) ---
   async searchViaVnBridge(query) {
     const bridgeUrl = (process.env.VN_BRIDGE_URL || '').trim().replace(/\/+$/, '');
@@ -348,7 +425,7 @@ export class MasothueCrawler {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       const res = await fetch(`${bridgeUrl}/api/search?q=${encodeURIComponent(query.trim())}`, {
         headers: {
@@ -383,7 +460,7 @@ export class MasothueCrawler {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       const cleanPath = path.startsWith('/') ? path : '/' + path;
       const res = await fetch(`${bridgeUrl}/api/detail?path=${encodeURIComponent(cleanPath)}`, {
@@ -1148,20 +1225,20 @@ export class MasothueCrawler {
         let enrichedData = { ...vCompany };
         try {
           const detail = await this.getDetail(`/${slug}`, true);
-          let serperInfo = null;
+          let bizInfo = null;
           if (!detail.success || !detail.data?.representative) {
-            serperInfo = await this.enrichExternal(q, vCompany.name);
+            bizInfo = await this.getFromDoanhNghiepBiz(q);
           }
 
           enrichedData = {
             ...vCompany,
             ...(detail.data || {}),
-            representative: detail.data?.representative || serperInfo?.representative || vCompany.representative || '',
-            phone: detail.data?.phone || serperInfo?.phone || vCompany.phone || '',
-            startDate: detail.data?.startDate || serperInfo?.startDate || vCompany.startDate || '',
+            representative: detail.data?.representative || bizInfo?.representative || vCompany.representative || '',
+            phone: detail.data?.phone || bizInfo?.phone || vCompany.phone || '',
+            startDate: detail.data?.startDate || bizInfo?.startDate || vCompany.startDate || '',
             managedBy: (detail.data?.managedBy && detail.data.managedBy !== 'Cơ quan Thuế') 
               ? detail.data.managedBy 
-              : (serperInfo?.managedBy || vCompany.managedBy || 'Cơ quan Thuế'),
+              : (vCompany.managedBy || 'Cơ quan Thuế'),
             industries: Array.isArray(detail.data?.industries) && detail.data.industries.length > 0 ? detail.data.industries : vCompany.industries
           };
         } catch (e) {
@@ -1570,14 +1647,31 @@ export class MasothueCrawler {
           return { success: true, data: existingInDb.data, fromDb: true };
         }
         if (taxMatch) {
+          // Priority fallback: DoanhNghiepBiz (has representative + phone!) and VietQR
+          const bizData = await this.getFromDoanhNghiepBiz(taxMatch[1]);
           const vCompany = await this.getFromVietQR(taxMatch[1]);
-          if (vCompany && vCompany.taxId && vCompany.name) {
-            const serperInfo = await this.enrichExternal(taxMatch[1], vCompany.name);
-            const finalCompany = serperInfo ? {
-              ...vCompany,
-              ...serperInfo,
-              managedBy: serperInfo.managedBy || vCompany.managedBy || 'Cơ quan Thuế'
-            } : vCompany;
+          if (bizData || vCompany) {
+            const finalCompany = {
+              name: vCompany?.name || bizData?.name || '',
+              slug: cleanPath.replace(/^\//, ''),
+              url: cleanPath.startsWith('/') ? cleanPath : '/' + cleanPath,
+              taxId: taxMatch[1],
+              taxAddress: vCompany?.address || bizData?.address || '',
+              address: bizData?.address || vCompany?.address || '',
+              status: vCompany?.status || bizData?.status || 'Đang hoạt động',
+              isStatusActive: (vCompany?.status || bizData?.status || '').toLowerCase().includes('đang hoạt động'),
+              internationalName: vCompany?.internationalName || '',
+              shortName: bizData?.shortName || vCompany?.shortName || '',
+              representative: bizData?.representative || '',
+              representativeNote: '',
+              phone: bizData?.phone || '',
+              startDate: bizData?.startDate || '',
+              managedBy: vCompany?.managedBy || 'Cơ quan Thuế',
+              type: bizData?.type || 'Doanh nghiệp',
+              mainIndustry: vCompany?.mainIndustry || bizData?.mainIndustry || '',
+              lastUpdated: new Date().toLocaleDateString('vi-VN'),
+              industries: vCompany?.industries || []
+            };
             await db.saveCompany(finalCompany);
             return { success: true, data: finalCompany };
           }
@@ -1593,14 +1687,30 @@ export class MasothueCrawler {
           return { success: true, data: existingInDb.data, fromDb: true };
         }
         if (taxMatch) {
+          const bizData = await this.getFromDoanhNghiepBiz(taxMatch[1]);
           const vCompany = await this.getFromVietQR(taxMatch[1]);
-          if (vCompany && vCompany.taxId && vCompany.name) {
-            const serperInfo = await this.enrichExternal(taxMatch[1], vCompany.name);
-            const finalCompany = serperInfo ? {
-              ...vCompany,
-              ...serperInfo,
-              managedBy: serperInfo.managedBy || vCompany.managedBy || 'Cơ quan Thuế'
-            } : vCompany;
+          if (bizData || vCompany) {
+            const finalCompany = {
+              name: vCompany?.name || bizData?.name || '',
+              slug: cleanPath.replace(/^\//, ''),
+              url: cleanPath.startsWith('/') ? cleanPath : '/' + cleanPath,
+              taxId: taxMatch[1],
+              taxAddress: vCompany?.address || bizData?.address || '',
+              address: bizData?.address || vCompany?.address || '',
+              status: vCompany?.status || bizData?.status || 'Đang hoạt động',
+              isStatusActive: (vCompany?.status || bizData?.status || '').toLowerCase().includes('đang hoạt động'),
+              internationalName: vCompany?.internationalName || '',
+              shortName: bizData?.shortName || vCompany?.shortName || '',
+              representative: bizData?.representative || '',
+              representativeNote: '',
+              phone: bizData?.phone || '',
+              startDate: bizData?.startDate || '',
+              managedBy: vCompany?.managedBy || 'Cơ quan Thuế',
+              type: bizData?.type || 'Doanh nghiệp',
+              mainIndustry: vCompany?.mainIndustry || bizData?.mainIndustry || '',
+              lastUpdated: new Date().toLocaleDateString('vi-VN'),
+              industries: vCompany?.industries || []
+            };
             await db.saveCompany(finalCompany);
             return { success: true, data: finalCompany };
           }
@@ -1658,7 +1768,7 @@ export class MasothueCrawler {
             info.representativeNote = ('Ngoài ra' + parts.slice(1).join('Ngoài ra')).trim();
           }
         } else if (key.includes('Điện thoại')) {
-          info.phone = textVal;
+          info.phone = textVal.replace(/Ẩn số điện thoại/i, '').replace(/Hiện số điện thoại/i, '').trim();
         } else if (key.includes('Ngày hoạt động')) {
           info.startDate = textVal;
         } else if (key.includes('Quản lý bởi')) {
@@ -1682,6 +1792,19 @@ export class MasothueCrawler {
         }
       });
 
+      // Enrich from DoanhNghiepBiz if representative or phone is missing from Masothue
+      if (taxMatch && (!info.representative || !info.phone)) {
+        try {
+          const bizData = await this.getFromDoanhNghiepBiz(taxMatch[1]);
+          if (bizData) {
+            if (!info.representative && bizData.representative) info.representative = bizData.representative;
+            if (!info.phone && bizData.phone) info.phone = bizData.phone;
+            if (!info.startDate && bizData.startDate) info.startDate = bizData.startDate;
+            if (!info.type && bizData.type) info.type = bizData.type;
+          }
+        } catch (e) {}
+      }
+
       this.setCache(cacheKey, info);
       return { success: true, data: info };
     } catch (err) {
@@ -1690,14 +1813,30 @@ export class MasothueCrawler {
         return { success: true, data: existingInDb.data, fromDb: true };
       }
       if (taxMatch) {
+        const bizData = await this.getFromDoanhNghiepBiz(taxMatch[1]);
         const vCompany = await this.getFromVietQR(taxMatch[1]);
-        if (vCompany && vCompany.taxId && vCompany.name) {
-          const serperInfo = await this.enrichExternal(taxMatch[1], vCompany.name);
-          const finalCompany = serperInfo ? {
-            ...vCompany,
-            ...serperInfo,
-            managedBy: serperInfo.managedBy || vCompany.managedBy || 'Cơ quan Thuế'
-          } : vCompany;
+        if (bizData || vCompany) {
+          const finalCompany = {
+            name: vCompany?.name || bizData?.name || '',
+            slug: cleanPath.replace(/^\//, ''),
+            url: cleanPath.startsWith('/') ? cleanPath : '/' + cleanPath,
+            taxId: taxMatch[1],
+            taxAddress: vCompany?.address || bizData?.address || '',
+            address: bizData?.address || vCompany?.address || '',
+            status: vCompany?.status || bizData?.status || 'Đang hoạt động',
+            isStatusActive: (vCompany?.status || bizData?.status || '').toLowerCase().includes('đang hoạt động'),
+            internationalName: vCompany?.internationalName || '',
+            shortName: bizData?.shortName || vCompany?.shortName || '',
+            representative: bizData?.representative || '',
+            representativeNote: '',
+            phone: bizData?.phone || '',
+            startDate: bizData?.startDate || '',
+            managedBy: vCompany?.managedBy || 'Cơ quan Thuế',
+            type: bizData?.type || 'Doanh nghiệp',
+            mainIndustry: vCompany?.mainIndustry || bizData?.mainIndustry || '',
+            lastUpdated: new Date().toLocaleDateString('vi-VN'),
+            industries: vCompany?.industries || []
+          };
           await db.saveCompany(finalCompany);
           return { success: true, data: finalCompany };
         }
