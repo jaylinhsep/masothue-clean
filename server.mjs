@@ -905,4 +905,11 @@ function startServer(p) {
   });
 }
 
-startServer(port);
+// Export Express app for Netlify / Serverless Functions
+export { app };
+export default app;
+
+// Only start standalone HTTP server if running outside serverless environment
+if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  startServer(port);
+}
