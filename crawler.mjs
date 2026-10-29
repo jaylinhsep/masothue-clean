@@ -432,7 +432,7 @@ export class MasothueCrawler {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 9500);
 
       const res = await fetch(`${bridgeUrl}/api/search?q=${encodeURIComponent(query.trim())}`, {
         headers: {
@@ -467,7 +467,7 @@ export class MasothueCrawler {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4500);
+      const timeoutId = setTimeout(() => controller.abort(), 9000);
 
       const cleanPath = path.startsWith('/') ? path : '/' + path;
       const res = await fetch(`${bridgeUrl}/api/detail?path=${encodeURIComponent(cleanPath)}`, {
