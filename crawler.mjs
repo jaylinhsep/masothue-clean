@@ -1145,6 +1145,123 @@ export class MasothueCrawler {
     return null;
   }
 
+  // --- Direct Masothue Scraper (Stealth session & rapid parsing) ---
+  async searchMasothue(effectiveQ, type = 'auto', page = 1) {
+    let token = await this.ensureSession();
+    if (!token) return null;
+
+    const searchBody = new URLSearchParams({
+      q: effectiveQ,
+      type: type || 'auto',
+      token,
+      'force-search': '1'
+    });
+
+    const searchHeaders = {
+      'referer': `${this.baseUrl}/`,
+      'origin': this.baseUrl,
+      'x-requested-with': 'XMLHttpRequest',
+      'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
+    };
+    if (this.sessionCookie) {
+      searchHeaders['cookie'] = this.sessionCookie;
+    }
+
+    try {
+      const ajaxRes = await gotScraping.post(`${this.baseUrl}/Ajax/Search`, {
+        headers: searchHeaders,
+        body: searchBody.toString(),
+        timeout: { request: 1800 }
+      });
+
+      if (!ajaxRes.body || ajaxRes.body.trim().startsWith('<')) return null;
+
+      let ajaxData = null;
+      try {
+        ajaxData = JSON.parse(ajaxRes.body);
+      } catch (e) {
+        return null;
+      }
+
+      // Direct match from Masothue (Redirects straight to company detail page)
+      if (ajaxData && ajaxData.url && ajaxData.url !== '/') {
+        const detail = await this.getDetail(ajaxData.url);
+        return {
+          success: true,
+          isDirect: true,
+          directUrl: ajaxData.url,
+          detail: detail.success ? detail.data : null,
+          items: detail.success ? [{
+            name: detail.data.name,
+            url: ajaxData.url,
+            taxId: detail.data.taxId,
+            representative: detail.data.representative,
+            address: detail.data.address || detail.data.taxAddress,
+            autoExpand: true
+          }] : [],
+          currentPage: 1,
+          maxPage: 1,
+          totalFound: 1
+        };
+      }
+
+      // Multiple matches from Masothue -> fetch HTML search list
+      if (ajaxData && ajaxData.success === 1) {
+        const searchUrl = `${this.baseUrl}/Search/?q=${encodeURIComponent(effectiveQ)}&type=${type || 'auto'}&token=${token}&force-search=1${page > 1 ? `&page=${page}` : ''}`;
+        const searchListHeaders = { 'referer': `${this.baseUrl}/` };
+        if (this.sessionCookie) {
+          searchListHeaders['cookie'] = this.sessionCookie;
+        }
+
+        const pageRes = await gotScraping({
+          url: searchUrl,
+          headers: searchListHeaders,
+          timeout: { request: 1800 }
+        });
+
+        const $ = cheerio.load(pageRes.body);
+        const items = [];
+        $('div.tax-listing > div').each((_, el) => {
+          const $el = $(el);
+          const titleLink = $el.find('h3 a');
+          const name = titleLink.text().trim();
+          const url = titleLink.attr('href') || $el.attr('data-prefetch');
+          if (!name || !url) return;
+
+          let taxId = '';
+          const taxMatch = $el.html().match(/Mã số thuế:[^<]*<a[^>]*>([^<]+)<\/a>/i);
+          if (taxMatch) taxId = taxMatch[1].trim();
+
+          let representative = '';
+          const repMatch = $el.html().match(/Người đại diện:[^<]*<em><a[^>]*>([^<]+)<\/a><\/em>/i);
+          if (repMatch) representative = repMatch[1].trim();
+
+          const address = $el.find('address').text().replace(/\s+/g, ' ').trim();
+          items.push({ name, url, taxId, representative, address });
+        });
+
+        if (items.length > 0) {
+          const totalPages = [1];
+          $('ul.page-numbers li a.page-numbers').each((_, el) => {
+            const p = parseInt($(el).text().trim(), 10);
+            if (!isNaN(p)) totalPages.push(p);
+          });
+          const maxPage = Math.max(...totalPages);
+
+          return {
+            success: true,
+            isDirect: false,
+            items,
+            currentPage: page,
+            maxPage,
+            totalFound: items.length
+          };
+        }
+      }
+    } catch (err) {}
+    return null;
+  }
+
   async search(query, type = 'auto', page = 1) {
     const q = query ? query.trim() : '';
     if (!q) {
@@ -1370,199 +1487,64 @@ export class MasothueCrawler {
       };
     }
 
-    // 3. Search Masothue using stealth gotScraping (Runs on VPS with domestic VN IP)
-    let token = await this.ensureSession();
+    // --- 3. PARALLEL MULTI-ENGINE RACING (Masothue + Yahoo, Super Fast <1.5s) ---
+    // Instead of waiting 6s sequentially for Masothue to fail before calling Yahoo,
+    // we fire Masothue and Yahoo in parallel! Whichever returns valid company results first WINS!
+    const masothuePromise = this.searchMasothue(effectiveQ, type, page).catch(() => null);
+    const yahooPromise = this.searchViaYahoo(effectiveQ).catch(() => null);
 
-    let ajaxData = null;
-    if (token) {
-      const searchBody = new URLSearchParams({
-        q: effectiveQ,
-        type: type || 'auto',
-        token,
-        'force-search': '1'
-      });
+    const fastResult = await new Promise((resolve) => {
+      let resolved = false;
+      let remaining = 2;
+      let bestResult = null;
 
-      try {
-        const searchHeaders = {
-          'referer': `${this.baseUrl}/`,
-          'origin': this.baseUrl,
-          'x-requested-with': 'XMLHttpRequest',
-          'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
-        };
-        if (this.sessionCookie) {
-          searchHeaders['cookie'] = this.sessionCookie;
+      const finish = (result) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(result);
         }
-
-        let ajaxRes = await gotScraping.post(`${this.baseUrl}/Ajax/Search`, {
-          headers: searchHeaders,
-          body: searchBody.toString(),
-          timeout: { request: 3000 }
-        });
-
-        if (ajaxRes.body && ajaxRes.body.trim().startsWith('<')) {
-          // Cloudflare temporary challenge page, don't crash JSON.parse
-          ajaxData = null;
-        } else {
-          try {
-            ajaxData = JSON.parse(ajaxRes.body);
-          } catch (e) {
-            ajaxData = null;
-          }
-        }
-
-        // If expired token (success !== 1), retry once
-        if (!ajaxData || ajaxData.success !== 1) {
-          token = await this.ensureSession(true);
-          if (token) {
-            searchBody.set('token', token);
-            const retryHeaders = {
-              'referer': `${this.baseUrl}/`,
-              'origin': this.baseUrl,
-              'x-requested-with': 'XMLHttpRequest',
-              'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
-            };
-            if (this.sessionCookie) {
-              retryHeaders['cookie'] = this.sessionCookie;
-            }
-            ajaxRes = await gotScraping.post(`${this.baseUrl}/Ajax/Search`, {
-              headers: retryHeaders,
-              body: searchBody.toString(),
-              timeout: { request: 3000 }
-            });
-            if (ajaxRes.body && !ajaxRes.body.trim().startsWith('<')) {
-              try {
-                ajaxData = JSON.parse(ajaxRes.body);
-              } catch (e) {
-                ajaxData = null;
-              }
-            }
-          }
-        }
-      } catch (err) {
-        // Suppress expected rate-limit warnings
-      }
-    }
-
-    // Direct match from Masothue (Redirects straight to company detail page)
-    if (ajaxData && ajaxData.url && ajaxData.url !== '/') {
-      const detail = await this.getDetail(ajaxData.url);
-      const result = {
-        success: true,
-        isDirect: true,
-        directUrl: ajaxData.url,
-        detail: detail.success ? detail.data : null,
-        items: detail.success ? [{
-          name: detail.data.name,
-          url: ajaxData.url,
-          taxId: detail.data.taxId,
-          representative: detail.data.representative,
-          address: detail.data.address || detail.data.taxAddress,
-          autoExpand: true
-        }] : [],
-        currentPage: 1,
-        maxPage: 1
       };
-      this.setCache(cacheKey, result);
-      return result;
-    }
 
-    // Multiple matches from Masothue -> fetch HTML search list
-    if (ajaxData && ajaxData.success === 1 && token) {
-      try {
-        const searchUrl = `${this.baseUrl}/Search/?q=${encodeURIComponent(effectiveQ)}&type=${type || 'auto'}&token=${token}&force-search=1${page > 1 ? `&page=${page}` : ''}`;
+      // Cap total search duration to 2.5s maximum
+      const safetyTimer = setTimeout(() => {
+        finish(bestResult);
+      }, 2500);
 
-        const searchListHeaders = {
-          'referer': `${this.baseUrl}/`
-        };
-        if (this.sessionCookie) {
-          searchListHeaders['cookie'] = this.sessionCookie;
+      const check = (res) => {
+        remaining--;
+        if (res && res.items && res.items.length > 0) {
+          if (!resolved) {
+            clearTimeout(safetyTimer);
+            finish(res);
+            return;
+          }
         }
-
-        const pageRes = await gotScraping({
-          url: searchUrl,
-          headers: searchListHeaders,
-          timeout: { request: 3000 }
-        });
-
-        const $ = cheerio.load(pageRes.body);
-
-        const items = [];
-        $('div.tax-listing > div').each((_, el) => {
-          const $el = $(el);
-          const titleLink = $el.find('h3 a');
-          const name = titleLink.text().trim();
-          const url = titleLink.attr('href') || $el.attr('data-prefetch');
-          if (!name || !url) return;
-
-          let taxId = '';
-          const taxMatch = $el.html().match(/Mã số thuế:[^<]*<a[^>]*>([^<]+)<\/a>/i);
-          if (taxMatch) taxId = taxMatch[1].trim();
-
-          let representative = '';
-          const repMatch = $el.html().match(/Người đại diện:[^<]*<em><a[^>]*>([^<]+)<\/a><\/em>/i);
-          if (repMatch) representative = repMatch[1].trim();
-
-          const address = $el.find('address').text().replace(/\s+/g, ' ').trim();
-
-          items.push({ name, url, taxId, representative, address });
-        });
-
-        if (items.length > 0) {
-          const totalPages = [1];
-          $('ul.page-numbers li a.page-numbers').each((_, el) => {
-            const p = parseInt($(el).text().trim(), 10);
-            if (!isNaN(p)) totalPages.push(p);
-          });
-          const maxPage = Math.max(...totalPages);
-
-          const result = {
-            success: true,
-            isDirect: false,
-            items,
-            currentPage: page,
-            maxPage,
-            totalFound: items.length
-          };
-          this.setCache(cacheKey, result);
-          return result;
+        if (res && !bestResult) {
+          bestResult = res;
         }
-      } catch (err) {
-        console.warn('[Crawler] gotScraping search list error:', err.message);
-      }
-    }
+        if (remaining === 0 && !resolved) {
+          clearTimeout(safetyTimer);
+          finish(bestResult);
+        }
+      };
 
-    // --- Priority 1: Tavily AI Search (1,000 Free searches/month forever, No Credit Card) ---
-    const tavilyResult = await this.searchViaTavily(effectiveQ);
-    if (tavilyResult && tavilyResult.items && tavilyResult.items.length > 0) {
+      masothuePromise.then(check);
+      yahooPromise.then(check);
+    });
+
+    if (fastResult && fastResult.items && fastResult.items.length > 0) {
       if (dbItems && dbItems.length > 0) {
-        const seenTax = new Set(tavilyResult.items.map(i => i.taxId));
+        const seenTax = new Set(fastResult.items.map(i => i.taxId));
         for (const item of dbItems) {
           if (!seenTax.has(item.taxId)) {
-            tavilyResult.items.push(item);
+            fastResult.items.push(item);
             seenTax.add(item.taxId);
           }
         }
-        tavilyResult.totalFound = tavilyResult.items.length;
+        fastResult.totalFound = fastResult.items.length;
       }
-      this.setCache(cacheKey, tavilyResult);
-      return tavilyResult;
-    }
-
-    // --- Priority 2: Yahoo Search Fallback (100% Free Forever, Unlimited, No API Key) ---
-    const yahooResult = await this.searchViaYahoo(effectiveQ);
-    if (yahooResult && yahooResult.items && yahooResult.items.length > 0) {
-      if (dbItems && dbItems.length > 0) {
-        const seenTax = new Set(yahooResult.items.map(i => i.taxId));
-        for (const item of dbItems) {
-          if (!seenTax.has(item.taxId)) {
-            yahooResult.items.push(item);
-            seenTax.add(item.taxId);
-          }
-        }
-        yahooResult.totalFound = yahooResult.items.length;
-      }
-      this.setCache(cacheKey, yahooResult);
-      return yahooResult;
+      this.setCache(cacheKey, fastResult);
+      return fastResult;
     }
 
     // --- Priority 3: Serper.dev Google API (2,500 Free searches) ---
