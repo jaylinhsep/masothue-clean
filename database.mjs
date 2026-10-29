@@ -17,9 +17,13 @@ export class Database {
   }
 
   async init() {
-    // Ensure local data dir exists
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
+    // Ensure local data dir exists (safe for serverless read-only environments)
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+    } catch (e) {
+      // Ignored in read-only serverless filesystems like Netlify / AWS Lambda
     }
 
     // Auto-load .env if available
