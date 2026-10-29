@@ -1449,8 +1449,7 @@ export class MasothueCrawler {
     }
 
     // --- Priority 0: Vietnam VPS Bridge (Domestic VN IP, Zero Block, Real-time) ---
-    // If VN_BRIDGE_URL is configured (Render Server), IMMEDIATELY query VPS bridge!
-    // Never let Render hang 15-30s attempting to scrape masothue.com directly from foreign US IP!
+    // If VN_BRIDGE_URL is configured, query VPS bridge first!
     if (process.env.VN_BRIDGE_URL) {
       const vnResult = await this.searchViaVnBridge(effectiveQ);
       if (vnResult && vnResult.items && vnResult.items.length > 0) {
@@ -1467,24 +1466,8 @@ export class MasothueCrawler {
         this.setCache(cacheKey, vnResult);
         return vnResult;
       }
-
-      // Fast-Path for Render: If VN Bridge found nothing, do NOT spend 20s running US scrapers
-      if (dbItems && dbItems.length > 0) {
-        return {
-          success: true,
-          isDirect: dbItems.length === 1,
-          fromDb: true,
-          items: dbItems,
-          currentPage: 1,
-          maxPage: 1,
-          totalFound: dbItems.length
-        };
-      }
-
-      return {
-        success: false,
-        message: 'Không tìm thấy doanh nghiệp phù hợp. Bạn hãy thử nhập chính xác Mã Số Thuế (10 chữ số) hoặc tên đầy đủ hơn.'
-      };
+      // If VN Bridge is offline or returned empty, do NOT abort! 
+      // Fall through to Yahoo & other engines so Netlify is 100% resilient and self-healing!
     }
 
     // --- 3. PARALLEL MULTI-ENGINE RACING (Masothue + Yahoo, Super Fast <1.5s) ---
